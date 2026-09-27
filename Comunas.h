@@ -15,4 +15,6 @@ struct Comuna {
 
 Comuna *crearComuna(char *nombre);
 
+
+
 #endif
