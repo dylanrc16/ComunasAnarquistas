@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <string.h>
+
 struct Recurso *crearRecurso(char nombre, int existencia, int maximo){
 
     struct Recurso *nuevo = calloc(1, sizeof(Recurso));
@@ -17,8 +20,12 @@ struct Recurso *agregarFinal(struct Recurso *inicio, char *nombre, int existenci
 
     struct Recurso *nueva = crearRecurso(nombre, existencia, maximo);
 
+    if (nueva == NULL){
+        return NULL;
+    }
+
     if (inicio == NULL){
-        inicio = nueva;
+        return nueva;
     }
 
     struct Recurso *act = inicio;
@@ -68,3 +75,25 @@ void liberarRecursos(struct Recurso *inicio) {
     }
 }
 
+struct Recurso *cargarRecursos(char *nombreArchivo) {
+    FILE *archivo = fopen(nombreArchivo, "r");
+
+    if (archivo == NULL) {
+        printf("No se pudo abrir el archivo %s\n", nombreArchivo);
+        return NULL;
+    }
+
+    struct Recurso *inicio = NULL;
+    char nombre[100];
+
+    while (fgets(nombre, sizeof(nombre), archivo) != NULL) {
+        nombre[strcspn(nombre, "\r\n")] = '\0';
+
+        if (nombre[0] != '\0') {
+            inicio = agregarRecursoFinal(inicio, nombre, 0, 0);
+        }
+    }
+
+    fclose(archivo);
+    return inicio;
+}

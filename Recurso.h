@@ -1,7 +1,8 @@
 #ifndef RECURSO_H
 #define RECURSO_H
 
-struct Recurso {
+struct Recurso
+{
     char nombre[50];
     int existencia;
     int maximo;
@@ -16,5 +17,6 @@ struct Recurso *agregarFinal(struct Recurso *inicio, char *nombre, int existenci
 
 void imprimirRecursos(struct Recurso *inicio);
 
-#endif
+struct Recurso *cargarRecursos(char *nombreArchivo);
 
+#endif

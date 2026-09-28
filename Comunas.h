@@ -13,7 +13,9 @@ struct Comuna {
     struct Comuna *siguiente;
 } Comuna;
 
-Comuna *crearComuna(char *nombre);
+struct Comuna *crearComuna(char *nombre);
+
+struct Comuna *cargarComunas(void);
 
 
 
