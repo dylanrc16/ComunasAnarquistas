@@ -9,6 +9,8 @@ struct Comuna {
 
     float necesidad;
     float satisfaccion;
+    float penalizacion;
+    float solidaridad;
 
     struct Recurso *bienes;
     struct Recurso *servicios;
