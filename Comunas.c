@@ -1,62 +1,80 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include "Comunas.h"
 
-struct Comuna *crearComuna(char *nombre, int cantidadPersonas){
-    if(nombre == NULL || cantidadPersonas < 0){
-        return -1;
+struct Comuna *crearComuna(const char *nombre, int cantidadPersonas) {
+    if (nombre == NULL || cantidadPersonas < 0) {
+        return NULL;
     }
-    struct Comuna *nueva = calloc(1, sizeof(Comuna));
 
-    nueva->nombre = nombre;
+    struct Comuna *nueva = calloc(1, sizeof(struct Comuna));
+
+    if (nueva == NULL) {
+        return NULL;
+    }
+
+    snprintf(nueva->nombre, sizeof(nueva->nombre), "%s", nombre);
     nueva->cantidadPersonas = cantidadPersonas;
 
     return nueva;
 }
 
-struct Comuna *agregarFinal(struct Comuna *inicio, char *nombre, int cantidadPersonas){
-
+struct Comuna *agregarComunaFinal(struct Comuna *inicio, const char *nombre, int cantidadPersonas) {
     struct Comuna *nueva = crearComuna(nombre, cantidadPersonas);
 
-    if (nueva == NULL){
-        return NULL;
+    if (nueva == NULL) {
+        return inicio;
     }
 
-    if (inicio == NULL){
+    if (inicio == NULL) {
         return nueva;
     }
 
-    struct Comuna *act = inicio;
+    struct Comuna *actual = inicio;
 
-    while(act->siguiente != NULL){
-        act = act->siguiente;
+    while (actual->siguiente != NULL) {
+        actual = actual->siguiente;
     }
-    act->siguiente = nueva;
+
+    actual->siguiente = nueva;
+    nueva->anterior = actual;
 
     return inicio;
 }
 
-void imprimir(struct Comuna *inicio) {
+struct Comuna *buscarComuna(struct Comuna *inicio, const char *nombre) {
+    struct Comuna *actual = inicio;
 
-    struct Comuna *act = inicio;
+    while (actual != NULL) {
+        if (strcmp(actual->nombre, nombre) == 0) {
+            return actual;
+        }
+        actual = actual->siguiente;
+    }
 
-    while (act != NULL) {
+    return NULL;
+}
 
-        printf("%d\n", act->nombre, act->cantidadPersonas);
-        act = act->siguiente;
+void imprimirComunas(struct Comuna *inicio) {
+    struct Comuna *actual = inicio;
+
+    while (actual != NULL) {
+        printf("%s: %d personas\n", actual->nombre, actual->cantidadPersonas);
+        actual = actual->siguiente;
     }
 }
 
-struct Comuna *buscar(struct Comuna *inicio, char *nombre) {
+void liberarComunas(struct Comuna *inicio) {
+    struct Comuna *actual = inicio;
 
-    struct Comuna *act = inicio;
-    while (act != NULL) {
-
-        if (act->nombre == nombre) {
-            return act;
-        }
-        act = act->siguiente;
+    while (actual != NULL) {
+        struct Comuna *siguiente = actual->siguiente;
+        liberarRecursos(actual->bienes);
+        liberarRecursos(actual->servicios);
+        free(actual);
+        actual = siguiente;
     }
-    return NULL;
 }
 
 struct Comuna *cargarComunas(void) {
@@ -74,14 +92,10 @@ struct Comuna *cargarComunas(void) {
         nombre[strcspn(nombre, "\r\n")] = '\0';
 
         if (nombre[0] != '\0') {
-            inicio = agregarFinal(inicio, nombre, 0);
+            inicio = agregarComunaFinal(inicio, nombre, 0);
         }
     }
 
     fclose(archivo);
     return inicio;
 }
-
-
-
-

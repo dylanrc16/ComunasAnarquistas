@@ -57,3 +57,13 @@ struct Persona *cargarPersonas(void) {
     fclose(archivo);
     return inicio;
 }
+
+void liberarPersonas(struct Persona *inicio) {
+    struct Persona *actual = inicio;
+
+    while (actual != NULL) {
+        struct Persona *siguiente = actual->siguiente;
+        free(actual);
+        actual = siguiente;
+    }
+}

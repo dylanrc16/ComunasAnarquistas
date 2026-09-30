@@ -6,6 +6,7 @@ struct Persona {
     struct Persona *siguiente;
 };
 
+void liberarPersonas(struct Persona *inicio);
 struct Persona *crearPersona(const char *nombre);
 struct Persona *agregarPersonaFinal(struct Persona *inicio, const char *nombre);
 struct Persona *cargarPersonas(void);

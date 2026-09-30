@@ -1,22 +1,27 @@
-#ifndef COMUNA_H
-#define COMUNA_H
+#ifndef COMUNAS_H
+#define COMUNAS_H
 
 #include "Recurso.h"
 
 struct Comuna {
     char nombre[50];
+    int cantidadPersonas;
 
-    Recurso *bienes;
-    Recurso *servicios;
+    float necesidad;
+    float satisfaccion;
+
+    struct Recurso *bienes;
+    struct Recurso *servicios;
 
     struct Comuna *anterior;
     struct Comuna *siguiente;
-} Comuna;
+};
 
-struct Comuna *crearComuna(char *nombre);
-
+struct Comuna *crearComuna(const char *nombre, int cantidadPersonas);
+struct Comuna *agregarComunaFinal(struct Comuna *inicio, const char *nombre, int cantidadPersonas);
+struct Comuna *buscarComuna(struct Comuna *inicio, const char *nombre);
+void imprimirComunas(struct Comuna *inicio);
+void liberarComunas(struct Comuna *inicio);
 struct Comuna *cargarComunas(void);
-
-
 
 #endif

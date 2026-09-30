@@ -1,11 +1,16 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include "Recurso.h"
 
-struct Recurso *crearRecurso(char nombre, int existencia, int maximo){
+struct Recurso *crearRecurso(const char *nombre, int existencia, int maximo) {
+    if (nombre == NULL || existencia < 0 || maximo < 0) {
+        return NULL;
+    }
 
-    struct Recurso *nuevo = calloc(1, sizeof(Recurso));
+    struct Recurso *nuevo = calloc(1, sizeof(struct Recurso));
 
-    if (nuevo == NULL){
+    if (nuevo == NULL) {
         return NULL;
     }
 
@@ -13,39 +18,37 @@ struct Recurso *crearRecurso(char nombre, int existencia, int maximo){
     nuevo->existencia = existencia;
     nuevo->maximo = maximo;
 
-    return nuevo;  
+    return nuevo;
 }
 
-struct Recurso *agregarFinal(struct Recurso *inicio, char *nombre, int existencia, int maximo){
+struct Recurso *agregarRecursoFinal(struct Recurso *inicio, const char *nombre, int existencia, int maximo) {
+    struct Recurso *nuevo = crearRecurso(nombre, existencia, maximo);
 
-    struct Recurso *nueva = crearRecurso(nombre, existencia, maximo);
-
-    if (nueva == NULL){
-        return NULL;
+    if (nuevo == NULL) {
+        return inicio;
     }
 
-    if (inicio == NULL){
-        return nueva;
+    if (inicio == NULL) {
+        return nuevo;
     }
 
-    struct Recurso *act = inicio;
+    struct Recurso *actual = inicio;
 
-    while(act->siguiente != NULL){
-        act = act->siguiente;
+    while (actual->siguiente != NULL) {
+        actual = actual->siguiente;
     }
-    act->siguiente = nueva;
 
+    actual->siguiente = nuevo;
     return inicio;
 }
 
-struct Recurso *buscarRecurso(struct Recurso *inicio, char *nombre) {
+struct Recurso *buscarRecurso(struct Recurso *inicio, const char *nombre) {
     struct Recurso *actual = inicio;
 
     while (actual != NULL) {
         if (strcmp(actual->nombre, nombre) == 0) {
             return actual;
         }
-
         actual = actual->siguiente;
     }
 
@@ -56,11 +59,7 @@ void imprimirRecursos(struct Recurso *inicio) {
     struct Recurso *actual = inicio;
 
     while (actual != NULL) {
-        printf("%s: %d/%d\n",
-               actual->nombre,
-               actual->existencia,
-               actual->maximo);
-
+        printf("%s: %d/%d\n", actual->nombre, actual->existencia, actual->maximo);
         actual = actual->siguiente;
     }
 }
@@ -75,7 +74,7 @@ void liberarRecursos(struct Recurso *inicio) {
     }
 }
 
-struct Recurso *cargarRecursos(char *nombreArchivo) {
+struct Recurso *cargarRecursos(const char *nombreArchivo) {
     FILE *archivo = fopen(nombreArchivo, "r");
 
     if (archivo == NULL) {
