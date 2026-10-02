@@ -3,9 +3,12 @@
 
 #include "Recurso.h"
 
-struct Comuna {
+struct Comuna
+{
     char nombre[50];
     int cantidadPersonas;
+    int porcentajeConsumo;
+    int porcentajeProduccion;
 
     float necesidad;
     float satisfaccion;
