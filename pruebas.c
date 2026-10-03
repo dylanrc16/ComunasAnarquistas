@@ -135,3 +135,72 @@ static void probarComunas(void) {
     verificar("cargarComunas lee el archivo comunas", cargadas != NULL);
     liberarComunas(cargadas);
 }
+
+
+/* ---------- Sociedad (usa la lista doble) ---------- */
+ 
+static void probarSociedad(void) {
+    printf("\n== Sociedad ==\n");
+ 
+    struct Comuna *nombres = NULL;
+    nombres = agregarComunaFinal(nombres, "A", 0);
+    nombres = agregarComunaFinal(nombres, "B", 0);
+    nombres = agregarComunaFinal(nombres, "C", 0);
+    nombres = agregarComunaFinal(nombres, "D", 0);
+    nombres = agregarComunaFinal(nombres, "E", 0);
+    nombres = agregarComunaFinal(nombres, "F", 0);
+    nombres = agregarComunaFinal(nombres, "G", 0);
+ 
+    struct Comuna *sociedad = crearSociedad(nombres, 7);
+    verificar("crearSociedad con 7 comunas funciona", sociedad != NULL);
+ 
+    int total = 0;
+    int comunas = 0;
+    for (struct Comuna *x = sociedad; x != NULL; x = x->siguiente) {
+        total += x->cantidadPersonas;
+        comunas++;
+    }
+ 
+    verificar("se crean 7 comunas", comunas == 7);
+    verificar("las 7 comunas suman exactamente 500 personas", total == 500);
+    verificar("crearSociedad rechaza 0 comunas", crearSociedad(nombres, 0) == NULL);
+    verificar("crearSociedad rechaza 51 comunas", crearSociedad(nombres, 51) == NULL);
+    verificar("crearSociedad rechaza mas comunas que nombres", crearSociedad(nombres, 8) == NULL);
+ 
+    struct Recurso *bienes = NULL;
+    bienes = agregarRecursoFinal(bienes, "Arroz", 0, 0);
+    bienes = agregarRecursoFinal(bienes, "Agua", 0, 0);
+ 
+    struct Recurso *servicios = NULL;
+    servicios = agregarRecursoFinal(servicios, "Salud", 0, 0);
+ 
+    asignarRecursos(sociedad, bienes, 2, servicios, 1);
+ 
+    struct Recurso *arroz = buscarRecurso(sociedad->bienes, "Arroz");
+    verificar("cada comuna recibe sus bienes", arroz != NULL);
+    verificar("el maximo de un bien es 2 por persona",
+              arroz != NULL && arroz->maximo == sociedad->cantidadPersonas * 2);
+    verificar("cada comuna recibe sus servicios", buscarRecurso(sociedad->servicios, "Salud") != NULL);
+ 
+    liberarComunas(sociedad);
+    liberarComunas(nombres);
+    liberarRecursos(bienes);
+    liberarRecursos(servicios);
+}
+ 
+int main(void) {
+    probarPersonas();
+    probarRecursos();
+    probarComunas();
+    probarSociedad();
+ 
+    printf("\n");
+    if (fallos == 0) {
+        printf("Todas las pruebas pasaron\n");
+    } else {
+        printf("Pruebas fallidas: %d\n", fallos);
+    }
+ 
+    return fallos != 0;
+}
+ 
