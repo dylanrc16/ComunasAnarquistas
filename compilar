@@ -1,0 +1,2 @@
+gcc -Wall -Wextra -o comunas.exe Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c
+.\comunas.exe

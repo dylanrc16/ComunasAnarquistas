@@ -242,8 +242,7 @@ void iniciarJuego(void) {
     struct Comuna *sociedad = crearSociedad(nombresComunas, cantidadComunas);
 
     if (sociedad != NULL) {
-        asignarRecursos(sociedad, catalogoBienes, cantidadBienes,
-                        catalogoServicios, cantidadServicios);
+        asignarRecursos(sociedad, catalogoBienes, cantidadBienes, catalogoServicios, cantidadServicios);
         asignarConsumo(sociedad);
         asignarProduccion(sociedad);
         iniciarEmergencias();
