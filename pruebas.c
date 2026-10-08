@@ -5,8 +5,10 @@
 #include "Comunas.h"
 #include "Sociedad.h"
 
+// Cuenta cuantas verificaciones fallaron
 static int fallos = 0;
 
+// Funcion para imprimir [OK] o [FALLO] segun la condicion
 static void verificar(const char *descripcion, int condicion) {
     if (condicion) {
         printf("  [OK]    %s\n", descripcion);
@@ -16,8 +18,9 @@ static void verificar(const char *descripcion, int condicion) {
     }
 }
 
-/* ---------- Lista simple de personas ---------- */
+// ---------- Lista simple de personas ----------
 
+// Funcion para probar la lista simple de personas
 static void probarPersonas(void) {
     printf("\n== Lista simple: Persona ==\n");
 
@@ -42,6 +45,7 @@ static void probarPersonas(void) {
 
     liberarPersonas(lista);
 
+    // Prueba la carga desde el archivo personas
     struct Persona *cargadas = cargarPersonas();
     verificar("cargarPersonas lee el archivo personas", cargadas != NULL);
 
@@ -54,8 +58,9 @@ static void probarPersonas(void) {
     liberarPersonas(cargadas);
 }
 
-/* ---------- Lista simple de recursos ---------- */
+// ---------- Lista simple de recursos ----------
 
+// Funcion para probar la lista simple de recursos
 static void probarRecursos(void) {
     printf("\n== Lista simple: Recurso ==\n");
 
@@ -85,6 +90,7 @@ static void probarRecursos(void) {
 
     liberarRecursos(lista);
 
+    // Prueba la carga desde archivo y el caso de archivo inexistente
     struct Recurso *bienes = cargarRecursos("bienes");
     verificar("cargarRecursos lee el archivo bienes", bienes != NULL);
     liberarRecursos(bienes);
@@ -93,8 +99,9 @@ static void probarRecursos(void) {
               cargarRecursos("archivo_que_no_existe") == NULL);
 }
 
-/* ---------- Lista doble de comunas ---------- */
+// ---------- Lista doble de comunas ----------
 
+// Funcion para probar la lista doble de comunas
 static void probarComunas(void) {
     printf("\n== Lista doble: Comuna ==\n");
 
@@ -114,7 +121,7 @@ static void probarComunas(void) {
     verificar("C->anterior es B", c->anterior == b);
     verificar("la ultima no tiene siguiente", c->siguiente == NULL);
 
-    /* recorrido hacia atras, partiendo de la ultima */
+    // Recorrido hacia atras, partiendo de la ultima
     char orden[10] = "";
     for (struct Comuna *x = c; x != NULL; x = x->anterior) {
         strcat(orden, x->nombre);
@@ -131,14 +138,16 @@ static void probarComunas(void) {
 
     liberarComunas(lista);
 
+    // Prueba la carga desde el archivo comunas
     struct Comuna *cargadas = cargarComunas();
     verificar("cargarComunas lee el archivo comunas", cargadas != NULL);
     liberarComunas(cargadas);
 }
 
 
-/* ---------- Sociedad (usa la lista doble) ---------- */
+// ---------- Sociedad (usa la lista doble) ----------
  
+// Funcion para probar crearSociedad y asignarRecursos (usa la lista doble)
 static void probarSociedad(void) {
     printf("\n== Sociedad ==\n");
  
@@ -151,6 +160,7 @@ static void probarSociedad(void) {
     nombres = agregarComunaFinal(nombres, "F", 0);
     nombres = agregarComunaFinal(nombres, "G", 0);
  
+    // Con 7 comunas, 500 / 7 deja sobrante y prueba el reparto
     struct Comuna *sociedad = crearSociedad(nombres, 7);
     verificar("crearSociedad con 7 comunas funciona", sociedad != NULL);
  
@@ -174,6 +184,7 @@ static void probarSociedad(void) {
     struct Recurso *servicios = NULL;
     servicios = agregarRecursoFinal(servicios, "Salud", 0, 0);
  
+    // Asigna 2 bienes y 1 servicio a cada comuna
     asignarRecursos(sociedad, bienes, 2, servicios, 1);
  
     struct Recurso *arroz = buscarRecurso(sociedad->bienes, "Arroz");
@@ -188,6 +199,7 @@ static void probarSociedad(void) {
     liberarRecursos(servicios);
 }
  
+// Funcion principal de las pruebas: corre todas y devuelve 1 si alguna fallo
 int main(void) {
     probarPersonas();
     probarRecursos();
