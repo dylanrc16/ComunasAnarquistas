@@ -35,10 +35,21 @@ Imaginar otros mundos posibles es parte de la labor de la ingeniería. Este proy
 
 Desde la carpeta del proyecto, donde están también los archivos de datos (`personas`, `bienes`, `servicios`, `comunas`):
 
+En Windows (es lo mismo que hace el archivo `compilar`):
+
 ```
-gcc -Wall -Wextra -o comunas *.c
-./comunas
+gcc -Wall -Wextra -o comunas.exe Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c
+.\comunas.exe
 ```
+
+En Linux o Mac el ejecutable no puede llamarse `comunas`, porque así se llama el archivo de datos y lo sobrescribiría:
+
+```
+gcc -Wall -Wextra -o comunas_app Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c
+./comunas_app
+```
+
+No se debe usar `*.c`: incluiría también `pruebas.c`, que tiene su propio `main`.
 
 Los archivos de datos se leen desde el directorio actual, por lo que el programa debe ejecutarse desde la carpeta que los contiene.
 
@@ -88,7 +99,7 @@ Cada comuna, a su vez, tiene dos listas simples de recursos: una de bienes y otr
 | Archivo | Contenido |
 |---|---|
 | `Sociedad.c/.h` | Reparte las 500 personas entre las comunas y asigna los recursos iniciales. |
-| `Consumo.c/.h` | Cada día baja la existencia de los bienes. |
+| `Consumo.c/.h` | Cada día baja la existencia de los bienes y servicios. |
 | `Produccion.c/.h` | Cada día sube la existencia de bienes y servicios. |
 | `Emergencias.c/.h` | Emergencias aleatorias que reducen recursos y afectan a las comunas cercanas. |
 | `Economia.c/.h` | El intercambio entre comunas (`regalarRecurso`). |
@@ -99,18 +110,19 @@ Cada comuna, a su vez, tiene dos listas simples de recursos: una de bienes y otr
 | Archivo | Contenido |
 |---|---|
 | `Juego.c/.h` | Ciclo de días, menús y entrada de datos del usuario. |
-| `main.c` | Solo llama a `iniciarJuego()`. |
-| `pruebas/pruebas.c` | Programa aparte que demuestra el funcionamiento de las listas. |
+| `Main.c` | Solo llama a `iniciarJuego()`. |
+| `pruebas.c` | Programa aparte que demuestra el funcionamiento de las listas. |
 
 ## Un día de simulación
 
 A partir del día 2, el programa ejecuta en este orden:
 
-1. `consumirBienes`: las personas gastan bienes.
+1. `consumirRecursos`: las personas gastan bienes y servicios.
 2. `producirRecursos`: las comunas producen.
-3. `avanzarEmergencias`: si toca, ocurre una emergencia.
-4. `actualizarIndices`: se recalculan necesidad y satisfacción.
-5. Se muestra el estado y la persona usuaria decide qué intercambios hacer. Después de cada regalo se recalculan los índices.
+3. `decaerEfectos`: la penalización y la solidaridad bajan 2 puntos.
+4. `avanzarEmergencias`: si toca, ocurre una emergencia.
+5. `actualizarIndices`: se recalculan necesidad y satisfacción.
+6. Se muestra el estado y la persona usuaria decide qué intercambios hacer. Después de cada regalo se recalculan los índices.
 
 El día 1 muestra el estado inicial, sin consumo ni producción.
 
@@ -124,9 +136,11 @@ El día 1 muestra el estado inicial, sin consumo ni producción.
 - Máximo de un servicio: 1 por cada 10 personas, redondeado hacia arriba.
 - Existencia inicial: entre 40% y 80% del máximo. Varía de una comuna a otra y de un recurso a otro.
 
-**Consumo.** Cada comuna tiene su propio porcentaje de consumo, entre 2% y 5%. Cada día, cada bien baja `personas × porcentaje / 100` (mínimo 1). Solo se consumen bienes.
+**Consumo.** Cada comuna tiene su propio porcentaje de consumo, sorteado al iniciar entre 2.00% y 5.00%. Cada día, cada bien baja `personas × porcentaje / 100` y cada servicio baja la décima parte de eso (igual que su máximo, que es 1 por cada 10 personas).
 
-**Producción.** Cada comuna tiene su propio porcentaje de producción, entre 2% y 5%. Cada día, cada bien sube `personas × porcentaje / 100` (mínimo 1), y cada servicio sube 1. Nada pasa de su máximo.
+**Producción.** Cada comuna tiene su propio porcentaje de producción, sorteado al iniciar entre 2.00% y 5.00%. Cada día, cada bien sube `personas × porcentaje / 100` y cada servicio la décima parte de eso. Nada pasa de su máximo.
+
+**Redondeo al azar.** Las existencias son enteras, pero el gasto y la producción tienen decimales. Para no perder esos decimales, `redondearAlAzar` (en `Recurso.c`) usa la parte decimal como probabilidad de redondear hacia arriba: un gasto de 2.3 resta 3 con 30% de probabilidad y 2 con 70%. Así, en promedio, cada comuna gasta exactamente lo que le corresponde, y dos comunas con porcentajes distintos gastan distinto aunque tengan pocas personas.
 
 Los porcentajes de consumo y producción se combinan de forma distinta en cada comuna. Así, algunas se mantienen estables, otras se van quedando sin bienes y otras acumulan excedente. Esa diferencia es lo que hace que regalar tenga sentido.
 
@@ -158,8 +172,8 @@ El resultado se limita al rango 0 a 100.
 - **Comunas cercanas:** las 2 anteriores y las 2 siguientes en la lista doble, es decir, hasta 4 comunas (menos si la comuna está en un extremo de la lista).
 - **Pesos 0.6 y 0.4:** la gente se siente bien sobre todo por lo que tiene su propia comuna, pero también influye cómo están las de alrededor.
 - **Penalización:** sube cuando una comuna cercana sufre una emergencia.
-- **Solidaridad:** sube cuando la comuna regala algo.
-- Ambas bajan 2 puntos por día, así que sus efectos se apagan con el tiempo.
+- **Solidaridad:** sube cuando la comuna regala algo, con un tope de 15.
+- Ambas bajan 2 puntos una vez por día (`decaerEfectos`), así que sus efectos se apagan con el tiempo. No bajan al recalcular los índices después de un regalo.
 
 La satisfacción de una comuna depende de la necesidad de sus vecinas, por eso `actualizarIndices` calcula primero todas las necesidades y después todas las satisfacciones.
 
@@ -187,7 +201,7 @@ Está en `regalarRecurso` (`Economia.c`). Una comuna entrega parte de un bien o 
 - **Solo se regala el excedente.** A quien regala nunca le queda menos del **40% de su máximo**. Es la parte de "según su capacidad": nadie se queda sin lo básico por dar.
 - **Quien recibe no puede pasar de su máximo.** Si el regalo es mayor, se recorta a lo que le cabe.
 - **No hay contrapartida ni deuda.** El programa no guarda quién le dio qué a quién, para no reproducir el dinero con otro nombre.
-- **Quien regala gana solidaridad** (+5), que sube su satisfacción un tiempo. Es un reconocimiento social, no algo que se pueda acumular ni canjear.
+- **Quien regala gana solidaridad** (+5), que sube su satisfacción un tiempo. Es un reconocimiento social, no algo que se pueda acumular ni canjear: tiene un tope de 15 y baja 2 puntos por día.
 - **Los intercambios los decide la persona usuaria**, como pide la especificación.
 
 Un ejemplo: una comuna que tiene mucho de un bien (por ejemplo, porque produce más de lo que consume) puede regalar parte a otra que lo necesita. La que recibe sube su existencia, su necesidad baja y la satisfacción de ambas mejora.
@@ -207,19 +221,19 @@ Todos son decisiones nuestras y están pensados para ajustarse fácilmente.
 | Pérdida por emergencia | 10% a 50% | `Emergencias.c` |
 | Penalización a las comunas cercanas | +10 | `Emergencias.c` |
 | Reserva de quien regala | 40% del máximo | `Economia.c` |
-| Bono de solidaridad por regalar | +5 | `Economia.c` |
-| Consumo / producción por comuna | 2% a 5% | `Consumo.c`, `Produccion.c` |
-| Recuperación de servicios | +1 por día | `Produccion.c` |
+| Bono de solidaridad por regalar | +5 (tope 15) | `Economia.c` |
+| Consumo / producción por comuna | 2.00% a 5.00%, al azar | `Consumo.c`, `Produccion.c` |
+| Consumo / producción de servicios | 1/10 de la de un bien | `Consumo.c`, `Produccion.c` |
 | Máximo de un bien / de un servicio | 2 por persona / 1 por cada 10 | `Sociedad.c` |
 
 ## Pruebas
 
-`pruebas/pruebas.c` es un programa aparte, con su propio `main`, que verifica las listas: orden de los elementos, enlaces `siguiente` y `anterior` (incluido el recorrido hacia atrás), búsquedas, validación de datos, carga desde archivos y reparto de las 500 personas. Cada prueba imprime `[OK]` o `[FALLO]`.
+`pruebas.c` es un programa aparte, con su propio `main`, que verifica las listas: orden de los elementos, enlaces `siguiente` y `anterior` (incluido el recorrido hacia atrás), búsquedas, validación de datos, carga desde archivos y reparto de las 500 personas. Cada prueba imprime `[OK]` o `[FALLO]`.
 
 Se compila y ejecuta desde la carpeta principal:
 
 ```
-gcc -Wall -Wextra -I. -o pruebas_bin pruebas/pruebas.c Persona.c Recurso.c Comunas.c Sociedad.c
+gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Sociedad.c
 ./pruebas_bin
 ```
 
@@ -229,4 +243,4 @@ gcc -Wall -Wextra -I. -o pruebas_bin pruebas/pruebas.c Persona.c Recurso.c Comun
 - Solo se usan dos estructuras de datos (lista simple y lista doble). No se implementó tabla de dispersión.
 - El aleatorio usa `rand()` con semilla por hora, así que cada partida es distinta.
 - La producción no se pidió en la especificación. La agregamos para que la sociedad no se quede sin bienes de forma inevitable, ya que sin ella solo hay procesos que consumen.
-- Los parámetros de la tabla anterior son decisiones de diseño y no están calibrados con datos reales.
+- Los parámetros de la tabla anterior son decisiones de diseño y no están calibrados con datos reales.

@@ -116,3 +116,17 @@ struct Recurso *cargarRecursos(const char *nombreArchivo) {
     fclose(archivo);
     return inicio;
 }
+
+// Funcion para redondear al azar: la parte decimal es la probabilidad de subir.
+// Asi una comuna que gasta 0.4 por dia gasta, en promedio, 0.4 por dia,
+// y dos comunas con porcentajes distintos gastan distinto aunque sean pequenas.
+int redondearAlAzar(float cantidad) {
+    int entero = (int) cantidad;
+    float decimal = cantidad - entero;
+
+    if ((float) rand() / RAND_MAX < decimal) {
+        entero++;
+    }
+
+    return entero;
+}

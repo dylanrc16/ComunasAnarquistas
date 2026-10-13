@@ -23,5 +23,9 @@ void liberarRecursos(struct Recurso *inicio);
 // Funcion para cargar recursos desde un archivo
 struct Recurso *cargarRecursos(const char *nombreArchivo);
 
+// Funcion para convertir una cantidad con decimales en entera, redondeando al azar
+// (2.3 da 3 con 30% de probabilidad y 2 con 70%)
+int redondearAlAzar(float cantidad);
+
 // Fin de la proteccion contra inclusion doble
-#endif
+#endif

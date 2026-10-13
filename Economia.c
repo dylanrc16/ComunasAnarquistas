@@ -8,6 +8,9 @@
 // Solidaridad que gana la comuna que regala
 #define BONO_SOLIDARIDAD 5.0f
 
+// Tope de la solidaridad: es reconocimiento social, no algo que se acumule sin fin
+#define SOLIDARIDAD_MAXIMA 15.0f
+
 // Funcion para regalar "cantidad" del recurso "nombre" de la comuna "da" a "recibe".
 // Nadie recibe nada a cambio y no se lleva cuenta de deudas.
 // Se regala menos de lo pedido si a quien regala le quedaria menos
@@ -75,5 +78,10 @@ int regalarRecurso(struct Comuna *da, struct Comuna *recibe, int esBien, const c
     // Quien regala gana reconocimiento de su comunidad, no una moneda
     da->solidaridad += BONO_SOLIDARIDAD;
 
+    // No deja que la solidaridad pase de su tope
+    if (da->solidaridad > SOLIDARIDAD_MAXIMA) {
+        da->solidaridad = SOLIDARIDAD_MAXIMA;
+    }
+
     return regalo;
-}
+}

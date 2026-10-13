@@ -1,70 +1,56 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "Produccion.h"
 
-// Funcion para dar a cada comuna su porcentaje de produccion (entre 2 y 5).
-// Es el porcentaje de habitantes que aporta a producir cada bien en un turno.
-// Se llama una sola vez, despues de crear la sociedad.
+// Funcion para sumar la produccion a cada recurso de una lista, sin pasar del maximo
+static void producirLista(struct Recurso *lista, float produccionPorDia)
+{
+    struct Recurso *actual = lista;
+
+    while (actual != NULL)
+    {
+        // Cada recurso se redondea por separado, asi no todos suben igual
+        actual->existencia += redondearAlAzar(produccionPorDia);
+
+        // No deja pasar del maximo
+        if (actual->existencia > actual->maximo)
+        {
+            actual->existencia = actual->maximo;
+        }
+
+        actual = actual->siguiente;
+    }
+}
+
+// Funcion para dar a cada comuna su porcentaje de produccion, al azar entre 2.0 y 5.0.
+// Se llama una sola vez, despues de crear la sociedad (y despues de srand).
 void asignarProduccion(struct Comuna *sociedad)
 {
     struct Comuna *comuna = sociedad;
-    int numeroComuna = 0;
 
     while (comuna != NULL)
     {
-        // Da 2, 3, 4, 5, 2, 3... segun la posicion de la comuna
-        comuna->porcentajeProduccion = 2 + (numeroComuna * 5) % 4;
-        numeroComuna++;
+        // rand() % 301 da 0..300, o sea 2.00 a 5.00 en pasos de 0.01
+        comuna->porcentajeProduccion = 2.0f + (rand() % 301) / 100.0f;
         comuna = comuna->siguiente;
     }
 }
 
 // Funcion para producir los recursos de un dia.
-// Cada bien sube personas * porcentajeProduccion / 100 (minimo 1).
-// Cada servicio sube 1. Ninguno pasa de su maximo.
+// Misma regla que el consumo: bienes personas * porcentajeProduccion / 100,
+// servicios lo mismo dividido entre 10. Ninguno pasa de su maximo.
 void producirRecursos(struct Comuna *sociedad)
 {
     struct Comuna *comuna = sociedad;
 
     while (comuna != NULL)
     {
-        // Calcula cuanto produce esta comuna de cada bien
-        int produccion = comuna->cantidadPersonas * comuna->porcentajeProduccion / 100;
+        // Cuanto produce esta comuna de cada bien (con decimales)
+        float produccionBien = comuna->cantidadPersonas * comuna->porcentajeProduccion / 100.0f;
 
-        // Toda comuna produce al menos 1
-        if (produccion < 1)
-        {
-            produccion = 1;
-        }
-
-        // Suma la produccion a cada bien
-        struct Recurso *bien = comuna->bienes;
-
-        while (bien != NULL)
-        {
-            bien->existencia += produccion;
-
-            // No deja pasar del maximo
-            if (bien->existencia > bien->maximo)
-            {
-                bien->existencia = bien->maximo;
-            }
-
-            bien = bien->siguiente;
-        }
-
-        // Los servicios se recuperan de 1 en 1
-        struct Recurso *servicio = comuna->servicios;
-
-        while (servicio != NULL)
-        {
-            if (servicio->existencia < servicio->maximo)
-            {
-                servicio->existencia++;
-            }
-
-            servicio = servicio->siguiente;
-        }
+        producirLista(comuna->bienes, produccionBien);
+        producirLista(comuna->servicios, produccionBien / 10.0f);
 
         comuna = comuna->siguiente;
     }
-}
+}

@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include "Emergencias.h"
 
 // Cada cuantos dias ocurre una emergencia (se elige al azar en este rango)
@@ -24,8 +23,6 @@ static int diasHastaProximaEmergencia(void) {
 
 // Funcion para iniciar las emergencias. Se llama una sola vez al empezar el juego
 void iniciarEmergencias(void) {
-    // Usa la hora como semilla para que cada partida sea distinta
-    srand((unsigned int) time(NULL));
     diasRestantes = diasHastaProximaEmergencia();
 }
 
@@ -103,4 +100,4 @@ void avanzarEmergencias(struct Comuna *sociedad) {
         provocarEmergencia(sociedad);
         diasRestantes = diasHastaProximaEmergencia();
     }
-}
+}

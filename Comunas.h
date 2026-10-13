@@ -9,8 +9,8 @@ struct Comuna
 {
     char nombre[50];  // Nombre de la comuna
     int cantidadPersonas;  // Habitantes de la comuna
-    int porcentajeConsumo;  // Porcentaje de habitantes que gasta cada bien por dia
-    int porcentajeProduccion;  // Porcentaje de habitantes que produce cada bien por dia
+    float porcentajeConsumo;  // Porcentaje de habitantes que gasta cada recurso por dia (2.0 a 5.0)
+    float porcentajeProduccion;  // Porcentaje de habitantes que produce cada recurso por dia (2.0 a 5.0)
 
     float necesidad;  // Que tanto le falta (5 a 95)
     float satisfaccion;  // Que tan bien esta (0 a 100)
@@ -38,4 +38,4 @@ void liberarComunas(struct Comuna *inicio);
 struct Comuna *cargarComunas(void);
 
 // Fin de la proteccion contra inclusion doble
-#endif
+#endif

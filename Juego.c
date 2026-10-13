@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "Juego.h"
 #include "Persona.h"
 #include "Recurso.h"
@@ -139,7 +140,7 @@ static void verComuna(struct Comuna *sociedad) {
     struct Comuna *comuna = elegirComuna(sociedad, "Numero de la comuna");
 
     printf("\n%s (%d personas)\n", comuna->nombre, comuna->cantidadPersonas);
-    printf("Consumo: %d%%   Produccion: %d%%\n",
+    printf("Consumo: %.2f%%   Produccion: %.2f%%\n",
            comuna->porcentajeConsumo, comuna->porcentajeProduccion);
 
     printf("\nBienes:\n");
@@ -231,6 +232,10 @@ static int menuDia(struct Comuna *sociedad, int dia) {
 
 // Funcion para iniciar el juego: carga datos, crea la sociedad y corre los dias
 void iniciarJuego(void) {
+    // Usa la hora como semilla para que cada partida sea distinta.
+    // Va primero porque los porcentajes de consumo y produccion tambien son al azar
+    srand((unsigned int) time(NULL));
+
     // Carga los cuatro archivos de datos
     struct Persona *personas = cargarPersonas();
     struct Recurso *catalogoBienes = cargarRecursos("bienes");
@@ -284,8 +289,9 @@ void iniciarJuego(void) {
         while (jugando) {
             // El dia 1 solo muestra el estado inicial; desde el 2 se simula
             if (dia > 1) {
-                consumirBienes(sociedad);
+                consumirRecursos(sociedad);
                 producirRecursos(sociedad);
+                decaerEfectos(sociedad);
                 avanzarEmergencias(sociedad);
                 actualizarIndices(sociedad);
             }
@@ -305,4 +311,4 @@ void iniciarJuego(void) {
     liberarRecursos(catalogoBienes);
     liberarRecursos(catalogoServicios);
     liberarComunas(nombresComunas);
-}
+}

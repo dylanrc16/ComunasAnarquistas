@@ -95,7 +95,20 @@ static float bajar(float valor, float cantidad) {
     return valor;
 }
 
-// Funcion para actualizar los indices. Se llama una vez por turno.
+// Funcion para que los efectos de emergencias y regalos se vayan apagando.
+// Se llama UNA vez por dia (no despues de cada regalo): baja 2 puntos
+// la penalizacion y la solidaridad de cada comuna, sin bajar de 0.
+void decaerEfectos(struct Comuna *sociedad) {
+    struct Comuna *comuna = sociedad;
+
+    while (comuna != NULL) {
+        comuna->penalizacion = bajar(comuna->penalizacion, 2.0f);
+        comuna->solidaridad = bajar(comuna->solidaridad, 2.0f);
+        comuna = comuna->siguiente;
+    }
+}
+
+// Funcion para actualizar los indices. Se llama cada dia y despues de cada regalo.
 // Primero todas las necesidades (porque la satisfaccion de una comuna
 // usa la necesidad de sus vecinas) y luego las satisfacciones.
 void actualizarIndices(struct Comuna *sociedad) {
@@ -112,10 +125,6 @@ void actualizarIndices(struct Comuna *sociedad) {
         // Segunda pasada: satisfacciones
         comuna->satisfaccion = calcularSatisfaccion(comuna);
 
-        // Los efectos de emergencias y regalos se van apagando
-        comuna->penalizacion = bajar(comuna->penalizacion, 2.0f);
-        comuna->solidaridad = bajar(comuna->solidaridad, 2.0f);
-
         comuna = comuna->siguiente;
     }
-}
+}

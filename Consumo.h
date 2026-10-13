@@ -6,8 +6,8 @@
 
 // Funcion para dar a cada comuna su porcentaje de consumo
 void asignarConsumo(struct Comuna *sociedad);
-// Funcion para gastar los bienes de un dia
-void consumirBienes(struct Comuna *sociedad);
+// Funcion para gastar los bienes y servicios de un dia
+void consumirRecursos(struct Comuna *sociedad);
 
 // Fin de la proteccion contra inclusion doble
-#endif
+#endif
