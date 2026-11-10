@@ -1,0 +1,9 @@
+# Entrega comprimida: va al servidor, no al repositorio
+*.tar.gz
+
+# Ejecutables: se generan al compilar
+*.exe
+a.out
+proyecto
+comunas_app
+pruebas_bin
