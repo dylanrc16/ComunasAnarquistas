@@ -15,6 +15,13 @@ struct Catalogo {
     int cantidadLibros;  // Cuantos libros se cargaron
 };
 
+// Biblioteca de una comuna: su propia cache de busquedas y sus estadisticas
+struct Biblioteca {
+    struct NodoSplay *cache;  // Arbol splay con las busquedas ya hechas
+    int busquedas;  // Cuantas busquedas de texto se han hecho
+    int aciertos;  // Cuantas se respondieron desde la cache
+};
+
 // Funcion para leer los nombres de los .txt de una carpeta y meterlos en el AVL.
 // Devuelve cuantos libros cargo (0 si la carpeta no existe o no tiene libros).
 int cargarCatalogo(struct Catalogo *catalogo, const char *carpeta);
