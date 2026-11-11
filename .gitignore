@@ -7,3 +7,6 @@ a.out
 proyecto
 comunas_app
 pruebas_bin
+
+# Corpus de libros (5 GB): va en la carpeta del proyecto, pero no en el repositorio
+corpus/
