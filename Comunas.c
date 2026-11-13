@@ -77,6 +77,18 @@ void imprimirComunas(struct Comuna *inicio) {
     }
 }
 
+// Funcion para liberar una sola comuna: primero sus listas internas y la cache
+// de su biblioteca, y despues el nodo
+void liberarComuna(struct Comuna *comuna) {
+    if (comuna == NULL) {
+        return;
+    }
+    liberarRecursos(comuna->bienes);
+    liberarRecursos(comuna->servicios);
+    liberarSplay(comuna->biblioteca.cache);
+    free(comuna);
+}
+
 // Funcion para liberar todas las comunas junto con sus bienes y servicios
 void liberarComunas(struct Comuna *inicio) {
     struct Comuna *actual = inicio;
@@ -84,11 +96,7 @@ void liberarComunas(struct Comuna *inicio) {
     while (actual != NULL) {
         // Guarda la siguiente antes de liberar la actual
         struct Comuna *siguiente = actual->siguiente;
-        // Primero libera las listas internas y luego el nodo
-        liberarRecursos(actual->bienes);
-        liberarRecursos(actual->servicios);
-        liberarSplay(actual->biblioteca.cache);
-        free(actual);
+        liberarComuna(actual);
         actual = siguiente;
     }
 }

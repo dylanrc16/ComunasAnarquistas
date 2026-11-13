@@ -199,3 +199,62 @@ void recalcularServicios(struct Comuna *sociedad, const struct TablaPersonas *ta
         }
     }
 }
+
+// ---------- Disolucion ----------
+
+// Funcion para disolver una comuna
+struct Comuna *disolverComuna(struct Comuna *sociedad, struct Comuna *comuna, struct TablaPersonas *tabla) {
+    // 1. Junta las comunas cercanas: hasta 2 anteriores y 2 siguientes
+    struct Comuna *cercanas[4];
+    int cantidadCercanas = 0;
+
+    struct Comuna *vecina = comuna->anterior;
+    for (int i = 0; i < 2 && vecina != NULL; i++) {
+        cercanas[cantidadCercanas] = vecina;
+        cantidadCercanas++;
+        vecina = vecina->anterior;
+    }
+
+    vecina = comuna->siguiente;
+    for (int i = 0; i < 2 && vecina != NULL; i++) {
+        cercanas[cantidadCercanas] = vecina;
+        cantidadCercanas++;
+        vecina = vecina->siguiente;
+    }
+
+    // 2. Las personas se mudan en ronda a las cercanas, con todos sus servicios.
+    //    Si no hay cercanas (era la unica comuna), quedan sin comuna.
+    int turno = 0;
+
+    for (int i = 0; i < TAMANO_TABLA; i++) {
+        for (struct Persona *persona = tabla->casillas[i]; persona != NULL; persona = persona->siguiente) {
+            if (persona->comuna != comuna) {
+                continue;
+            }
+
+            if (cantidadCercanas == 0) {
+                persona->comuna = NULL;
+            } else {
+                persona->comuna = cercanas[turno % cantidadCercanas];
+                turno++;
+            }
+        }
+    }
+
+    // 3. Saca el nodo de la lista doble reenganchando a sus vecinas
+    if (comuna->anterior != NULL) {
+        comuna->anterior->siguiente = comuna->siguiente;
+    } else {
+        // Era la primera: la sociedad empieza ahora en la siguiente
+        sociedad = comuna->siguiente;
+    }
+
+    if (comuna->siguiente != NULL) {
+        comuna->siguiente->anterior = comuna->anterior;
+    }
+
+    // 4. Los bienes se pierden y la biblioteca se cierra: se libera la comuna
+    liberarComuna(comuna);
+
+    return sociedad;
+}

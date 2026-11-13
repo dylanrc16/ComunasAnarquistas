@@ -24,5 +24,17 @@ void asignarServiciosPersonas(struct TablaPersonas *tabla, struct Recurso *catal
 // saben cada servicio. Se llama al inicio y cada vez que alguien se muda o aprende.
 void recalcularServicios(struct Comuna *sociedad, const struct TablaPersonas *tabla);
 
+// Una comuna entra en crisis con necesidad >= 85 o satisfaccion <= 25,
+// y se disuelve si pasa 3 dias seguidos en crisis
+#define CRISIS_NECESIDAD 85.0f
+#define CRISIS_SATISFACCION 25.0f
+#define DIAS_PARA_DISOLVER 3
+
+// Funcion para disolver una comuna: sus personas se mudan en ronda a las comunas
+// cercanas (2 anteriores y 2 siguientes) con sus servicios, sus bienes se pierden
+// y el nodo sale de la lista doble. Devuelve el nuevo inicio de la sociedad
+// (cambia si se disuelve la primera comuna).
+struct Comuna *disolverComuna(struct Comuna *sociedad, struct Comuna *comuna, struct TablaPersonas *tabla);
+
 // Fin de la proteccion contra inclusion doble
 #endif

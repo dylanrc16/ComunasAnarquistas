@@ -22,6 +22,7 @@ struct Comuna
     float satisfaccionAnterior;  // Ultima satisfaccion calculada (la usan las vecinas)
     int regalosDados;  // Cuantos regalos ha dado en total
     int regalosRecibidos;  // Cuantos regalos ha recibido en total
+    int diasEnCrisis;  // Dias seguidos con necesidad muy alta o satisfaccion muy baja
 
     struct Recurso *bienes;  // Lista de bienes de la comuna
     struct Recurso *servicios;  // Lista de servicios de la comuna
@@ -39,10 +40,12 @@ struct Comuna *agregarComunaFinal(struct Comuna *inicio, const char *nombre, int
 struct Comuna *buscarComuna(struct Comuna *inicio, const char *nombre);
 // Funcion para imprimir todas las comunas
 void imprimirComunas(struct Comuna *inicio);
+// Funcion para liberar una sola comuna (sus bienes, servicios y biblioteca)
+void liberarComuna(struct Comuna *comuna);
 // Funcion para liberar la lista de comunas
 void liberarComunas(struct Comuna *inicio);
 // Funcion para cargar los nombres de comunas del archivo
 struct Comuna *cargarComunas(void);
 
 // Fin de la proteccion contra inclusion doble
-#endif
+#endif

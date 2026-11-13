@@ -14,6 +14,7 @@
 #include "Economia.h"
 #include "Emergencias.h"
 #include "Biblioteca.h"
+#include "Jugador.h"
 
 // ---------- Utilidades ----------
 
@@ -80,16 +81,18 @@ static int contarComunas(struct Comuna *inicio) {
 // ---------- Mostrar informacion ----------
 
 // Funcion para mostrar la necesidad y satisfaccion de cada comuna y el promedio
-static void mostrarEstado(struct Comuna *sociedad, int dia) {
-    printf("\n===== Dia %d =====\n", dia);
+// Las comunas del jugador se marcan con *.
+static void mostrarEstado(struct Comuna *sociedad, int dia, const struct Jugador *jugador) {
+    printf("\n===== Dia %d =====   Vidas: %d de %d   (* = sus comunas)\n",
+           dia, VIDAS - jugador->vidasPerdidas, VIDAS);
 
     int numero = 1;
     float sumaSatisfaccion = 0;
     struct Comuna *comuna = sociedad;
 
     while (comuna != NULL) {
-        printf("%2d. %-22s %3d personas  necesidad %5.1f  satisfaccion %5.1f  reciprocidad %5.1f\n",
-               numero, comuna->nombre, comuna->cantidadPersonas,
+        printf("%2d.%s%-22s %3d personas  necesidad %5.1f  satisfaccion %5.1f  reciprocidad %5.1f\n",
+               numero, estaAdministrada(jugador, comuna) ? "*" : " ", comuna->nombre, comuna->cantidadPersonas,
                comuna->necesidad, comuna->satisfaccion, comuna->reciprocidad);
 
         sumaSatisfaccion += comuna->satisfaccion;
@@ -184,11 +187,18 @@ static void regalarServicioMenu(struct Comuna *sociedad, struct TablaPersonas *t
 
 // Funcion para pedir los datos de un regalo y hacerlo entre dos comunas.
 // Un bien se regala por cantidad; un servicio se regala mudando a una persona.
-static void hacerRegalo(struct Comuna *sociedad, struct TablaPersonas *tabla) {
+static void hacerRegalo(struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Jugador *jugador) {
     int tipo = leerEntero("1 = bien, 2 = servicio", 1, 2);
 
     // Pide quien regala y quien recibe
     struct Comuna *da = elegirComuna(sociedad, "Numero de la comuna que regala");
+
+    // El jugador solo decide por sus comunas; las demas regalan solas
+    if (!estaAdministrada(jugador, da)) {
+        printf("Solo puede regalar desde sus comunas (las marcadas con *)\n");
+        return;
+    }
+
     struct Comuna *recibe = elegirComuna(sociedad, "Numero de la comuna que recibe");
 
     // No se puede regalar a si misma
@@ -414,7 +424,7 @@ static int elegirServicioAEstudiar(struct Persona *persona) {
 // Funcion para ir a la biblioteca: una persona busca textos en la biblioteca de su
 // comuna. Cada busqueda con resultados le hace leer un libro que no habia leido.
 // Al leer 3 libros aprende el servicio que estaba estudiando.
-static void irABiblioteca(struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo) {
+static void irABiblioteca(struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo, const struct Jugador *jugador) {
     char nombre[50];
     leerTexto("Nombre de la persona (ej. Ana Sanchez 2)", nombre, sizeof(nombre));
 
@@ -427,6 +437,13 @@ static void irABiblioteca(struct Comuna *sociedad, struct TablaPersonas *tabla, 
     }
 
     struct Comuna *comuna = persona->comuna;
+
+    // Solo las personas de las comunas del jugador
+    if (!estaAdministrada(jugador, comuna)) {
+        printf("%s vive en %s, que no es una de sus comunas\n", persona->nombre, comuna->nombre);
+        return;
+    }
+
     printf("%s va a la biblioteca de %s\n", persona->nombre, comuna->nombre);
 
     // Si no esta estudiando nada, elige que servicio quiere aprender
@@ -499,10 +516,144 @@ static void irABiblioteca(struct Comuna *sociedad, struct TablaPersonas *tabla, 
     }
 }
 
+// ---------- Jugador ----------
+
+// Funcion para que el jugador elija sus 3 comunas al inicio
+static void elegirComunasIniciales(struct Comuna *sociedad, struct Jugador *jugador) {
+    printf("\nComunas de la sociedad:\n");
+    int numero = 1;
+
+    for (struct Comuna *comuna = sociedad; comuna != NULL; comuna = comuna->siguiente) {
+        printf("%2d. %s (%d personas)\n", numero, comuna->nombre, comuna->cantidadPersonas);
+        numero++;
+    }
+
+    printf("Elija las %d comunas que va a administrar\n", COMUNAS_ADMINISTRADAS);
+
+    while (contarAdministradas(jugador) < COMUNAS_ADMINISTRADAS) {
+        struct Comuna *comuna = elegirComuna(sociedad, "Numero de la comuna");
+
+        if (agregarAdministrada(jugador, comuna)) {
+            printf("Ahora administra %s\n", comuna->nombre);
+        } else {
+            printf("Ya administra %s; elija otra\n", comuna->nombre);
+        }
+    }
+}
+
+// ---------- Paso de los dias ----------
+
+// Funcion para que el jugador elija otra comuna cuando se disuelve una de las suyas
+static void elegirReemplazo(struct Comuna *sociedad, struct Jugador *jugador) {
+    printf("Elija una comuna nueva para administrar (no puede ser una de las suyas)\n");
+
+    while (1) {
+        struct Comuna *comuna = elegirComuna(sociedad, "Numero de la comuna");
+
+        if (agregarAdministrada(jugador, comuna)) {
+            printf("Ahora administra %s\n", comuna->nombre);
+            return;
+        }
+
+        printf("Ya administra %s; elija otra\n", comuna->nombre);
+    }
+}
+
+// Funcion para revisar que comunas estan en crisis y disolver las que llevan
+// 3 dias seguidos. Devuelve el nuevo inicio de la sociedad y deja *perdio en 1
+// si la partida se perdio.
+static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, int *perdio) {
+    struct Comuna *comuna = sociedad;
+    int huboDisolucion = 0;
+
+    while (comuna != NULL) {
+        // Se guarda la siguiente antes, porque la comuna se puede liberar
+        struct Comuna *siguiente = comuna->siguiente;
+
+        if (comuna->necesidad >= CRISIS_NECESIDAD || comuna->satisfaccion <= CRISIS_SATISFACCION) {
+            comuna->diasEnCrisis++;
+
+            if (comuna->diasEnCrisis < DIAS_PARA_DISOLVER) {
+                printf("!!! %s esta en crisis (dia %d de %d) !!!\n",
+                       comuna->nombre, comuna->diasEnCrisis, DIAS_PARA_DISOLVER);
+            } else {
+                int esDelJugador = estaAdministrada(jugador, comuna);
+                printf("*** %s se disolvio: sus %d personas se mudaron a las comunas cercanas ***\n",
+                       comuna->nombre, comuna->cantidadPersonas);
+
+                // Si era del jugador, se saca de su lista y pierde una vida
+                if (esDelJugador) {
+                    quitarAdministrada(jugador, comuna);
+                    jugador->vidasPerdidas++;
+                    printf("Era una de sus comunas. Vidas restantes: %d de %d\n", VIDAS - jugador->vidasPerdidas, VIDAS);
+                }
+
+                sociedad = disolverComuna(sociedad, comuna, tabla);
+                huboDisolucion = 1;
+            }
+        } else {
+            // Salio de la crisis: la cuenta vuelve a empezar
+            comuna->diasEnCrisis = 0;
+        }
+
+        comuna = siguiente;
+    }
+
+    if (!huboDisolucion) {
+        return sociedad;
+    }
+
+    // Las personas se mudaron: se recalculan servicios e indices
+    recalcularServicios(sociedad, tabla);
+    actualizarIndices(sociedad);
+
+    // Dos formas de perder: 3 vidas o menos de 3 comunas en la sociedad (lo pide el PDF)
+    if (jugador->vidasPerdidas >= VIDAS) {
+        printf("\n=== PARTIDA PERDIDA: se disolvieron %d de sus comunas ===\n", VIDAS);
+        *perdio = 1;
+        return sociedad;
+    }
+
+    if (contarComunas(sociedad) < COMUNAS_ADMINISTRADAS) {
+        printf("\n=== FRACASARON: la sociedad tiene menos de %d comunas ===\n", COMUNAS_ADMINISTRADAS);
+        *perdio = 1;
+        return sociedad;
+    }
+
+    // Si perdio comunas pero le quedan vidas, elige reemplazos
+    while (contarAdministradas(jugador) < COMUNAS_ADMINISTRADAS) {
+        mostrarEstado(sociedad, 0, jugador);
+        elegirReemplazo(sociedad, jugador);
+    }
+
+    return sociedad;
+}
+
+// Funcion para simular un dia completo. Devuelve el nuevo inicio de la sociedad
+// (cambia si se disuelve la primera comuna).
+static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, int dia, int *perdio) {
+    printf("\n--- Dia %d ---\n", dia);
+
+    consumirRecursos(sociedad);
+    producirRecursos(sociedad);
+    decaerEfectos(sociedad);
+    // Los servicios vuelven a ser lo que saben las personas
+    // (una emergencia de ayer solo los interrumpio ese dia)
+    recalcularServicios(sociedad, tabla);
+    // Las comunas autonomas se ayudan solas
+    ayudaAutonoma(sociedad, tabla, jugador);
+    avanzarEmergencias(sociedad);
+    actualizarIndices(sociedad);
+
+    // Al final del dia: crisis y disoluciones
+    return revisarDisoluciones(sociedad, tabla, jugador, perdio);
+}
+
 // ---------- Menu del dia ----------
 
-// Funcion para mostrar el menu del dia. Devuelve 1 para seguir al siguiente dia y 0 para salir
-static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *catalogo, struct TablaPersonas *tabla) {
+// Funcion para mostrar el menu del dia. Devuelve cuantos dias hay que avanzar
+// (1 con la opcion 4, de 1 a 30 con la opcion 11) o 0 para salir
+static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *catalogo, struct TablaPersonas *tabla, const struct Jugador *jugador) {
     // Repite el menu hasta pasar de dia o salir
     while (1) {
         printf("\n1. Hacer un regalo entre comunas\n");
@@ -515,21 +666,22 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
         printf("8. Ver las personas de una comuna\n");
         printf("9. Buscar una persona por nombre (tabla hash)\n");
         printf("10. Ir a la biblioteca (aprender un servicio)\n");
+        printf("11. Pasar varios dias\n");
         printf("0. Salir\n");
 
-        int opcion = leerEntero("Opcion", 0, 10);
+        int opcion = leerEntero("Opcion", 0, 11);
 
         if (opcion == 0) {
             return 0;
         }
         if (opcion == 1) {
-            hacerRegalo(sociedad, tabla);
+            hacerRegalo(sociedad, tabla, jugador);
         }
         if (opcion == 2) {
             verComuna(sociedad);
         }
         if (opcion == 3) {
-            mostrarEstado(sociedad, dia);
+            mostrarEstado(sociedad, dia, jugador);
         }
         if (opcion == 4) {
             return 1;
@@ -553,7 +705,10 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
             buscarPersonaMenu(tabla);
         }
         if (opcion == 10) {
-            irABiblioteca(sociedad, tabla, catalogo);
+            irABiblioteca(sociedad, tabla, catalogo, jugador);
+        }
+        if (opcion == 11) {
+            return leerEntero("Cuantos dias", 1, 30);
         }
     }
 }
@@ -603,8 +758,19 @@ void iniciarJuego(void) {
     // No mas de 50 comunas ni mas que los nombres disponibles
     int maximoComunas = totalComunas < 50 ? totalComunas : 50;
 
+    // Hacen falta al menos 3 comunas: con menos, la partida ya estaria perdida
+    if (maximoComunas < COMUNAS_ADMINISTRADAS) {
+        printf("El archivo comunas debe tener al menos %d nombres\n", COMUNAS_ADMINISTRADAS);
+        liberarCatalogo(&catalogo);
+        liberarTablaPersonas(&tabla);
+        liberarRecursos(catalogoBienes);
+        liberarRecursos(catalogoServicios);
+        liberarComunas(nombresComunas);
+        return;
+    }
+
     // Pide la configuracion de la partida
-    int cantidadComunas = leerEntero("Cuantas comunas", 1, maximoComunas);
+    int cantidadComunas = leerEntero("Cuantas comunas", COMUNAS_ADMINISTRADAS, maximoComunas);
     int cantidadBienes = leerEntero("Cuantos bienes", 1, totalBienes);
     int cantidadServicios = leerEntero("Cuantos servicios", 1, totalServicios);
 
@@ -630,30 +796,38 @@ void iniciarJuego(void) {
         actualizarIndices(sociedad);
         actualizarIndices(sociedad);
 
-        // Bucle principal: un ciclo por dia
-        int dia = 1;
-        int jugando = 1;
+        // El jugador elige las 3 comunas que va a administrar
+        struct Jugador jugador;
+        iniciarJugador(&jugador);
+        elegirComunasIniciales(sociedad, &jugador);
 
-        while (jugando) {
-            // El dia 1 solo muestra el estado inicial; desde el 2 se simula
-            if (dia > 1) {
-                consumirRecursos(sociedad);
-                producirRecursos(sociedad);
-                decaerEfectos(sociedad);
-                // Los servicios vuelven a ser lo que saben las personas
-                // (una emergencia de ayer solo los interrumpio ese dia)
-                recalcularServicios(sociedad, &tabla);
-                avanzarEmergencias(sociedad);
-                actualizarIndices(sociedad);
+        // Bucle principal: el dia 1 solo muestra el estado inicial;
+        // despues el menu dice cuantos dias avanzar (0 para salir)
+        int dia = 1;
+        int perdio = 0;
+        mostrarEstado(sociedad, dia, &jugador);
+
+        while (!perdio) {
+            int diasAvanzar = menuDia(sociedad, dia, &catalogo, &tabla, &jugador);
+
+            if (diasAvanzar == 0) {
+                break;
             }
 
-            // Muestra el estado y abre el menu del dia
-            mostrarEstado(sociedad, dia);
-            jugando = menuDia(sociedad, dia, &catalogo, &tabla);
-            dia++;
+            for (int i = 0; i < diasAvanzar && !perdio; i++) {
+                dia++;
+                sociedad = simularDia(sociedad, &tabla, &jugador, dia, &perdio);
+            }
+
+            mostrarEstado(sociedad, dia, &jugador);
         }
 
-        // Al salir, libera la sociedad
+        if (perdio) {
+            printf("La sociedad llego hasta el dia %d\n", dia);
+        }
+
+        // Al salir, libera la lista del jugador (solo sus nodos) y la sociedad
+        liberarJugador(&jugador);
         liberarComunas(sociedad);
     }
 
