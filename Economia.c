@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "Economia.h"
+#include "Sociedad.h"
 
 // La comuna que regala nunca baja de este porcentaje de su maximo:
 // se regala el excedente, no lo que hace falta para vivir
@@ -139,4 +140,139 @@ struct Persona *regalarServicio(struct TablaPersonas *tabla, struct Comuna *da, 
     registrarRegalo(da, recibe);
 
     return candidata;
+}
+
+// ---------- Ayuda mutua automatica ----------
+
+// Una comuna autonoma regala un bien cuando tiene mas de este porcentaje de su maximo
+#define AUTONOMA_EXCEDENTE 70
+// Solo le regala a una comuna que tenga menos de este porcentaje de ese bien
+#define AUTONOMA_NECESITA 40
+// Regala como maximo este porcentaje de su maximo por bien por dia
+#define AUTONOMA_REGALO 10
+
+// Funcion para buscar la comuna que mas necesita un bien: la de menor porcentaje,
+// siempre que este bajo AUTONOMA_NECESITA. Devuelve NULL si nadie lo necesita.
+static struct Comuna *comunaQueMasNecesitaBien(struct Comuna *sociedad, struct Comuna *da, const char *bien) {
+    struct Comuna *elegida = NULL;
+    float menorPorcentaje = AUTONOMA_NECESITA;
+
+    for (struct Comuna *comuna = sociedad; comuna != NULL; comuna = comuna->siguiente) {
+        struct Recurso *recurso = buscarRecurso(comuna->bienes, bien);
+
+        if (comuna == da || recurso == NULL || recurso->maximo == 0) {
+            continue;
+        }
+
+        float porcentaje = 100.0f * recurso->existencia / recurso->maximo;
+
+        if (porcentaje < menorPorcentaje) {
+            menorPorcentaje = porcentaje;
+            elegida = comuna;
+        }
+    }
+
+    return elegida;
+}
+
+// Funcion para contar cuantas personas de una comuna saben un servicio
+// (sin el tope del maximo que usa recalcularServicios)
+static int personasQueSaben(const struct TablaPersonas *tabla, const struct Comuna *comuna, const char *servicio) {
+    int cantidad = 0;
+
+    for (int i = 0; i < TAMANO_TABLA; i++) {
+        for (struct Persona *persona = tabla->casillas[i]; persona != NULL; persona = persona->siguiente) {
+            if (persona->comuna == comuna && sabeServicio(persona, servicio)) {
+                cantidad++;
+            }
+        }
+    }
+
+    return cantidad;
+}
+
+// Funcion para buscar una comuna donde nadie sepa un servicio
+static struct Comuna *comunaSinServicio(struct Comuna *sociedad, struct Comuna *da, const char *servicio) {
+    for (struct Comuna *comuna = sociedad; comuna != NULL; comuna = comuna->siguiente) {
+        struct Recurso *recurso = buscarRecurso(comuna->servicios, servicio);
+
+        if (comuna != da && recurso != NULL && recurso->existencia == 0) {
+            return comuna;
+        }
+    }
+
+    return NULL;
+}
+
+// Funcion para la ayuda mutua automatica de las comunas autonomas
+int ayudaAutonoma(struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Jugador *jugador) {
+    int regalos = 0;
+
+    for (struct Comuna *da = sociedad; da != NULL; da = da->siguiente) {
+        // Las comunas del jugador no regalan solas: eso lo decide el jugador
+        if (estaAdministrada(jugador, da)) {
+            continue;
+        }
+
+        // 1. Bienes: regala lo que le sobra a quien mas lo necesita
+        for (struct Recurso *bien = da->bienes; bien != NULL; bien = bien->siguiente) {
+            if (bien->maximo == 0 || 100 * bien->existencia < AUTONOMA_EXCEDENTE * bien->maximo) {
+                continue;
+            }
+
+            struct Comuna *recibe = comunaQueMasNecesitaBien(sociedad, da, bien->nombre);
+
+            if (recibe == NULL) {
+                continue;
+            }
+
+            int cantidad = bien->maximo * AUTONOMA_REGALO / 100;
+            int regalado = regalarRecurso(da, recibe, 1, bien->nombre, cantidad);
+
+            if (regalado > 0) {
+                regalos++;
+
+                // Solo se anuncian los regalos que reciben las comunas del jugador
+                if (estaAdministrada(jugador, recibe)) {
+                    printf("Ayuda mutua: %s le regalo %d de %s a su comuna %s\n",
+                           da->nombre, regalado, bien->nombre, recibe->nombre);
+                }
+            }
+        }
+
+        // 2. Servicios: si le sobran personas en un servicio, una se muda
+        //    a una comuna donde nadie lo sabe (maximo una mudanza por dia)
+        for (struct Recurso *servicio = da->servicios; servicio != NULL; servicio = servicio->siguiente) {
+            if (personasQueSaben(tabla, da, servicio->nombre) <= servicio->maximo) {
+                continue;
+            }
+
+            struct Comuna *recibe = comunaSinServicio(sociedad, da, servicio->nombre);
+
+            if (recibe == NULL) {
+                continue;
+            }
+
+            struct Persona *persona = regalarServicio(tabla, da, recibe, servicio->nombre);
+
+            if (persona != NULL) {
+                regalos++;
+
+                if (estaAdministrada(jugador, recibe)) {
+                    printf("Ayuda mutua: %s se mudo de %s a su comuna %s (%s)\n",
+                           persona->nombre, da->nombre, recibe->nombre, servicio->nombre);
+                }
+
+                // Cambiaron las personas: se recalculan antes de seguir
+                recalcularServicios(sociedad, tabla);
+                break;
+            }
+        }
+    }
+
+    if (regalos > 0) {
+        printf("Ayuda mutua entre comunas: %d regalos hoy\n", regalos);
+    }
+
+    return regalos;
 }

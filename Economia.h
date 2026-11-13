@@ -4,6 +4,7 @@
 
 #include "Comunas.h"
 #include "TablaPersonas.h"
+#include "Jugador.h"
 
 // Funcion para regalar un recurso de una comuna a otra (economia del regalo).
 // Devuelve la cantidad que realmente se regalo (0 si no se pudo).
@@ -14,6 +15,15 @@ int regalarRecurso(struct Comuna *da, struct Comuna *recibe, int esBien, const c
 // Solo se puede si en la comuna que da quedan al menos otra persona que lo sepa.
 // Devuelve la persona que se mudo, o NULL si no se pudo.
 struct Persona *regalarServicio(struct TablaPersonas *tabla, struct Comuna *da, struct Comuna *recibe, const char *servicio);
+
+// Funcion para la ayuda mutua automatica de las comunas que NO administra el jugador.
+// Se llama una vez por dia. Cada comuna autonoma:
+//   - regala de cada bien que tenga sobre el 70% a la comuna que mas lo necesite (bajo 40%)
+//   - si tiene mas personas de las que necesita en un servicio, muda una a la comuna
+//     que no tenga a nadie con ese servicio (como maximo una mudanza por dia)
+// Imprime los regalos que reciben las comunas del jugador y un resumen.
+// Devuelve cuantos regalos se hicieron.
+int ayudaAutonoma(struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Jugador *jugador);
 
 // Fin de la proteccion contra inclusion doble
 #endif
