@@ -11,6 +11,29 @@
 // Tope de la solidaridad: es reconocimiento social, no algo que se acumule sin fin
 #define SOLIDARIDAD_MAXIMA 15.0f
 
+// Apoyo que siente la comuna que recibe un regalo, y su tope
+#define BONO_APOYO 5.0f
+#define APOYO_MAXIMO 15.0f
+
+// Funcion para anotar un regalo en las dos comunas: cuenta el regalo dado y el
+// recibido (para la reciprocidad), da solidaridad a quien regala y apoyo a quien recibe
+static void registrarRegalo(struct Comuna *da, struct Comuna *recibe) {
+    da->regalosDados++;
+    recibe->regalosRecibidos++;
+
+    // Quien regala gana reconocimiento de su comunidad, no una moneda
+    da->solidaridad += BONO_SOLIDARIDAD;
+    if (da->solidaridad > SOLIDARIDAD_MAXIMA) {
+        da->solidaridad = SOLIDARIDAD_MAXIMA;
+    }
+
+    // Quien recibe siente el alivio de la ayuda
+    recibe->apoyoRecibido += BONO_APOYO;
+    if (recibe->apoyoRecibido > APOYO_MAXIMO) {
+        recibe->apoyoRecibido = APOYO_MAXIMO;
+    }
+}
+
 // Funcion para regalar "cantidad" del recurso "nombre" de la comuna "da" a "recibe".
 // Nadie recibe nada a cambio y no se lleva cuenta de deudas.
 // Se regala menos de lo pedido si a quien regala le quedaria menos
@@ -75,13 +98,45 @@ int regalarRecurso(struct Comuna *da, struct Comuna *recibe, int esBien, const c
     origen->existencia -= regalo;
     destino->existencia += regalo;
 
-    // Quien regala gana reconocimiento de su comunidad, no una moneda
-    da->solidaridad += BONO_SOLIDARIDAD;
-
-    // No deja que la solidaridad pase de su tope
-    if (da->solidaridad > SOLIDARIDAD_MAXIMA) {
-        da->solidaridad = SOLIDARIDAD_MAXIMA;
-    }
+    // Anota el regalo: contadores, solidaridad y apoyo
+    registrarRegalo(da, recibe);
 
     return regalo;
 }
+
+// Funcion para "regalar" un servicio mudando a una persona que lo sabe.
+// Es como la reserva de los bienes: la comuna que da no se queda sin el servicio.
+struct Persona *regalarServicio(struct TablaPersonas *tabla, struct Comuna *da, struct Comuna *recibe, const char *servicio) {
+    if (da == NULL || recibe == NULL || da == recibe || servicio == NULL) {
+        return NULL;
+    }
+
+    // Busca en la tabla a las personas de la comuna que da que saben el servicio
+    int cuantasSaben = 0;
+    struct Persona *candidata = NULL;
+
+    for (int i = 0; i < TAMANO_TABLA; i++) {
+        for (struct Persona *persona = tabla->casillas[i]; persona != NULL; persona = persona->siguiente) {
+            if (persona->comuna == da && sabeServicio(persona, servicio)) {
+                cuantasSaben++;
+
+                if (candidata == NULL) {
+                    candidata = persona;
+                }
+            }
+        }
+    }
+
+    // Tiene que quedar al menos una persona que lo sepa en la comuna que da
+    if (cuantasSaben < 2) {
+        return NULL;
+    }
+
+    // La persona se muda: basta con cambiar su puntero a la comuna
+    candidata->comuna = recibe;
+
+    // Anota el regalo: contadores, solidaridad y apoyo
+    registrarRegalo(da, recibe);
+
+    return candidata;
+}

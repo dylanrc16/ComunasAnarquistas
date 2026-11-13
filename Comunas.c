@@ -87,6 +87,7 @@ void liberarComunas(struct Comuna *inicio) {
         // Primero libera las listas internas y luego el nodo
         liberarRecursos(actual->bienes);
         liberarRecursos(actual->servicios);
+        liberarSplay(actual->biblioteca.cache);
         free(actual);
         actual = siguiente;
     }

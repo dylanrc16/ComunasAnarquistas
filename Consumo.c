@@ -31,9 +31,9 @@ void asignarConsumo(struct Comuna *sociedad) {
     }
 }
 
-// Funcion para gastar los bienes y servicios de un dia.
-// Bienes: personas * porcentajeConsumo / 100 por dia.
-// Servicios: lo mismo dividido entre 10, igual que su maximo (1 por cada 10 personas).
+// Funcion para gastar los bienes de un dia: personas * porcentajeConsumo / 100.
+// Los servicios no se gastan: son conocimiento de las personas
+// (se recalculan con recalcularServicios).
 void consumirRecursos(struct Comuna *sociedad) {
     struct Comuna *comuna = sociedad;
 
@@ -42,7 +42,6 @@ void consumirRecursos(struct Comuna *sociedad) {
         float gastoBien = comuna->cantidadPersonas * comuna->porcentajeConsumo / 100.0f;
 
         gastarLista(comuna->bienes, gastoBien);
-        gastarLista(comuna->servicios, gastoBien / 10.0f);
 
         comuna = comuna->siguiente;
     }

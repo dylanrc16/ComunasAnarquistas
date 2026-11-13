@@ -36,9 +36,9 @@ void asignarProduccion(struct Comuna *sociedad)
     }
 }
 
-// Funcion para producir los recursos de un dia.
-// Misma regla que el consumo: bienes personas * porcentajeProduccion / 100,
-// servicios lo mismo dividido entre 10. Ninguno pasa de su maximo.
+// Funcion para producir los bienes de un dia: personas * porcentajeProduccion / 100,
+// sin pasar del maximo. Los servicios no se producen: salen de lo que saben
+// las personas (se recalculan con recalcularServicios).
 void producirRecursos(struct Comuna *sociedad)
 {
     struct Comuna *comuna = sociedad;
@@ -49,7 +49,6 @@ void producirRecursos(struct Comuna *sociedad)
         float produccionBien = comuna->cantidadPersonas * comuna->porcentajeProduccion / 100.0f;
 
         producirLista(comuna->bienes, produccionBien);
-        producirLista(comuna->servicios, produccionBien / 10.0f);
 
         comuna = comuna->siguiente;
     }

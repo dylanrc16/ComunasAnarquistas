@@ -3,6 +3,7 @@
 #define COMUNAS_H
 
 #include "Recurso.h"
+#include "Biblioteca.h"
 
 // Nodo de la lista doblemente enlazada de comunas
 struct Comuna
@@ -16,9 +17,15 @@ struct Comuna
     float satisfaccion;  // Que tan bien esta (0 a 100)
     float penalizacion;  // Castigo por emergencias cercanas
     float solidaridad;  // Reconocimiento por haber regalado
+    float apoyoRecibido;  // Alivio por haber recibido regalos hace poco (baja cada dia)
+    float reciprocidad;  // Balance entre regalos dados y recibidos (0 a 100)
+    float satisfaccionAnterior;  // Ultima satisfaccion calculada (la usan las vecinas)
+    int regalosDados;  // Cuantos regalos ha dado en total
+    int regalosRecibidos;  // Cuantos regalos ha recibido en total
 
     struct Recurso *bienes;  // Lista de bienes de la comuna
     struct Recurso *servicios;  // Lista de servicios de la comuna
+    struct Biblioteca biblioteca;  // Biblioteca comunitaria: su propia cache de busquedas
 
     struct Comuna *anterior;  // Comuna anterior en la lista
     struct Comuna *siguiente;  // Comuna siguiente en la lista
@@ -38,4 +45,4 @@ void liberarComunas(struct Comuna *inicio);
 struct Comuna *cargarComunas(void);
 
 // Fin de la proteccion contra inclusion doble
-#endif
+#endif
