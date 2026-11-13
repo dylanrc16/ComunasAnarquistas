@@ -15,6 +15,7 @@
 #include "Emergencias.h"
 #include "Biblioteca.h"
 #include "Jugador.h"
+#include "Celular.h"
 
 // ---------- Utilidades ----------
 
@@ -636,6 +637,8 @@ static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *
 
     consumirRecursos(sociedad);
     producirRecursos(sociedad);
+    // El sol carga los celulares segun los paneles solares de cada comuna
+    cargarCelulares(sociedad);
     decaerEfectos(sociedad);
     // Los servicios vuelven a ser lo que saben las personas
     // (una emergencia de ayer solo los interrumpio ese dia)
@@ -651,8 +654,12 @@ static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *
 
 // ---------- Menu del dia ----------
 
+// Valor que devuelve el menu cuando el celular pide la autodestruccion
+#define AUTODESTRUCCION -1
+
 // Funcion para mostrar el menu del dia. Devuelve cuantos dias hay que avanzar
-// (1 con la opcion 4, de 1 a 30 con la opcion 11) o 0 para salir
+// (1 con la opcion 4, de 1 a 30 con la opcion 11), 0 para salir
+// o AUTODESTRUCCION si en el celular se eligio la opcion 5
 static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *catalogo, struct TablaPersonas *tabla, const struct Jugador *jugador) {
     // Repite el menu hasta pasar de dia o salir
     while (1) {
@@ -667,9 +674,10 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
         printf("9. Buscar una persona por nombre (tabla hash)\n");
         printf("10. Ir a la biblioteca (aprender un servicio)\n");
         printf("11. Pasar varios dias\n");
+        printf("12. Abrir el celular de una de sus comunas\n");
         printf("0. Salir\n");
 
-        int opcion = leerEntero("Opcion", 0, 11);
+        int opcion = leerEntero("Opcion", 0, 12);
 
         if (opcion == 0) {
             return 0;
@@ -710,6 +718,22 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
         if (opcion == 11) {
             return leerEntero("Cuantos dias", 1, 30);
         }
+        if (opcion == 12) {
+            struct Comuna *comuna = elegirComuna(sociedad, "Numero de la comuna (su celular)");
+
+            if (!estaAdministrada(jugador, comuna)) {
+                printf("Solo puede usar el celular de sus comunas (las marcadas con *)\n");
+            } else if (abrirCelular(comuna)) {
+                return AUTODESTRUCCION;
+            }
+        }
+    }
+}
+
+// Funcion para anunciar cada liberacion de memoria (solo en la autodestruccion)
+static void anunciarLiberacion(int anunciar, const char *texto) {
+    if (anunciar) {
+        printf("%s... listo\n", texto);
     }
 }
 
@@ -774,6 +798,9 @@ void iniciarJuego(void) {
     int cantidadBienes = leerEntero("Cuantos bienes", 1, totalBienes);
     int cantidadServicios = leerEntero("Cuantos servicios", 1, totalServicios);
 
+    // Se activa si en el celular se elige la opcion 5: se anuncia cada liberacion
+    int autodestruccion = 0;
+
     // Crea las comunas con sus habitantes
     struct Comuna *sociedad = crearSociedad(nombresComunas, cantidadComunas);
 
@@ -796,6 +823,9 @@ void iniciarJuego(void) {
         actualizarIndices(sociedad);
         actualizarIndices(sociedad);
 
+        // Todos los celulares empiezan con la bateria llena
+        iniciarCelulares(sociedad);
+
         // El jugador elige las 3 comunas que va a administrar
         struct Jugador jugador;
         iniciarJugador(&jugador);
@@ -814,6 +844,11 @@ void iniciarJuego(void) {
                 break;
             }
 
+            if (diasAvanzar == AUTODESTRUCCION) {
+                autodestruccion = 1;
+                break;
+            }
+
             for (int i = 0; i < diasAvanzar && !perdio; i++) {
                 dia++;
                 sociedad = simularDia(sociedad, &tabla, &jugador, dia, &perdio);
@@ -827,16 +862,26 @@ void iniciarJuego(void) {
         }
 
         // Al salir, libera la lista del jugador (solo sus nodos) y la sociedad
+        anunciarLiberacion(autodestruccion, "Liberando la lista de comunas del jugador");
         liberarJugador(&jugador);
+        anunciarLiberacion(autodestruccion, "Liberando las comunas: bienes, servicios y la cache de cada biblioteca (lista doble + splay)");
         liberarComunas(sociedad);
     }
 
-    // Libera el catalogo (AVL); la cache de cada comuna se libera con liberarComunas
+    // Libera el catalogo (AVL); la cache de cada comuna ya se libero con liberarComunas
+    anunciarLiberacion(autodestruccion, "Liberando el catalogo de libros (AVL)");
     liberarCatalogo(&catalogo);
 
     // Libera los datos cargados de los archivos
+    anunciarLiberacion(autodestruccion, "Liberando las personas y sus servicios (tabla hash)");
     liberarTablaPersonas(&tabla);
+    anunciarLiberacion(autodestruccion, "Liberando los catalogos de bienes y servicios");
     liberarRecursos(catalogoBienes);
     liberarRecursos(catalogoServicios);
+    anunciarLiberacion(autodestruccion, "Liberando los nombres de las comunas");
     liberarComunas(nombresComunas);
-}
+
+    if (autodestruccion) {
+        printf("\nLa sociedad se disolvio en el vacio. No quedo ni un byte.\n");
+    }
+}

@@ -23,6 +23,7 @@ struct Comuna
     int regalosDados;  // Cuantos regalos ha dado en total
     int regalosRecibidos;  // Cuantos regalos ha recibido en total
     int diasEnCrisis;  // Dias seguidos con necesidad muy alta o satisfaccion muy baja
+    int bateria;  // Bateria del celular comunitario (0 a 100), se carga con energia solar
 
     struct Recurso *bienes;  // Lista de bienes de la comuna
     struct Recurso *servicios;  // Lista de servicios de la comuna
