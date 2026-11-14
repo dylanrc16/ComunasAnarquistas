@@ -56,5 +56,9 @@ int yaLeyo(const struct Persona *persona, const char *libro);
 // Devuelve 1 si con esta lectura aprendio el servicio y 0 si no.
 int leerLibro(struct Persona *persona, const char *libro);
 
+// Funcion para imprimir una persona en una linea: nombre, servicios que sabe
+// y, si esta estudiando, cuantos libros lleva
+void imprimirPersona(const struct Persona *persona);
+
 // Fin de la proteccion contra inclusion doble
 #endif

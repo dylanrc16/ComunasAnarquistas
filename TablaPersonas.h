@@ -29,6 +29,12 @@ struct Persona *buscarPersonaTabla(const struct TablaPersonas *tabla, const char
 int cargarTablaPersonas(struct TablaPersonas *tabla, const char *nombreArchivo);
 // Funcion para mostrar como quedo repartida la tabla (casillas usadas y colisiones)
 void imprimirEstadisticasTabla(const struct TablaPersonas *tabla);
+// Funcion para imprimir con un numero (1, 2, 3...) a las personas de una comuna.
+// Recorre la tabla casilla por casilla. Devuelve cuantas personas imprimio.
+int imprimirPersonasComuna(const struct TablaPersonas *tabla, const struct Comuna *comuna);
+// Funcion para obtener la persona numero "posicion" (desde 1) de una comuna,
+// en el mismo orden en que las imprime imprimirPersonasComuna (NULL si no hay)
+struct Persona *personaNumero(const struct TablaPersonas *tabla, const struct Comuna *comuna, int posicion);
 // Funcion para liberar todas las personas de la tabla (con sus servicios)
 void liberarTablaPersonas(struct TablaPersonas *tabla);
 

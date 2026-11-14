@@ -242,45 +242,26 @@ static void hacerRegalo(struct Comuna *sociedad, struct TablaPersonas *tabla, co
 
 // ---------- Personas ----------
 
-// Funcion para imprimir una persona: nombre y servicios que sabe
-static void imprimirPersona(const struct Persona *persona) {
-    printf("  %-24s ", persona->nombre);
-
-    if (persona->servicios == NULL) {
-        printf("(no sabe ningun servicio)");
-    }
-
-    for (struct Servicio *servicio = persona->servicios; servicio != NULL; servicio = servicio->siguiente) {
-        printf("%s%s", servicio->nombre, servicio->siguiente != NULL ? ", " : "");
-    }
-
-    // Si esta estudiando algo, muestra cuanto le falta
-    if (persona->servicioEnEstudio[0] != '\0') {
-        printf("  [estudia %s: %d/%d libros]", persona->servicioEnEstudio,
-               persona->librosParaServicio, LIBROS_PARA_APRENDER);
-    }
-
-    printf("\n");
-}
-
 // Funcion para ver las personas de una comuna: recorre la tabla filtrando por comuna
 static void verPersonasComuna(struct Comuna *sociedad, const struct TablaPersonas *tabla) {
     struct Comuna *comuna = elegirComuna(sociedad, "Numero de la comuna");
     printf("\nPersonas de %s (%d):\n", comuna->nombre, comuna->cantidadPersonas);
-
-    for (int i = 0; i < TAMANO_TABLA; i++) {
-        for (struct Persona *persona = tabla->casillas[i]; persona != NULL; persona = persona->siguiente) {
-            if (persona->comuna == comuna) {
-                imprimirPersona(persona);
-            }
-        }
-    }
+    imprimirPersonasComuna(tabla, comuna);
 }
 
 // Funcion para buscar una persona por nombre en la tabla hash
-static void buscarPersonaMenu(const struct TablaPersonas *tabla) {
+static void buscarPersonaMenu(struct Comuna *sociedad, const struct TablaPersonas *tabla) {
     char nombre[50];
-    leerTexto("Nombre de la persona (ej. Ana Sanchez 2)", nombre, sizeof(nombre));
+    leerTexto("Nombre de la persona (Enter para ver la lista de una comuna)", nombre, sizeof(nombre));
+
+    // Si no recuerda el nombre, ve la lista de una comuna y lo escribe despues.
+    // El nombre se sigue buscando en la tabla hash (eso es lo que se demuestra aqui).
+    if (nombre[0] == '\0') {
+        struct Comuna *comuna = elegirComuna(sociedad, "Numero de la comuna");
+        printf("\nPersonas de %s (%d):\n", comuna->nombre, comuna->cantidadPersonas);
+        imprimirPersonasComuna(tabla, comuna);
+        leerTexto("\nNombre de la persona", nombre, sizeof(nombre));
+    }
 
     struct Persona *persona = buscarPersonaTabla(tabla, nombre);
 
@@ -291,6 +272,7 @@ static void buscarPersonaMenu(const struct TablaPersonas *tabla) {
 
     printf("Esta en la casilla %d de la tabla hash y vive en %s\n",
            calcularCasilla(persona->nombre), persona->comuna != NULL ? persona->comuna->nombre : "(ninguna comuna)");
+    printf("  ");
     imprimirPersona(persona);
 }
 
@@ -426,24 +408,35 @@ static int elegirServicioAEstudiar(struct Persona *persona) {
 // comuna. Cada busqueda con resultados le hace leer un libro que no habia leido.
 // Al leer 3 libros aprende el servicio que estaba estudiando.
 static void irABiblioteca(struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo, const struct Jugador *jugador) {
-    char nombre[50];
-    leerTexto("Nombre de la persona (ej. Ana Sanchez 2)", nombre, sizeof(nombre));
+    // Primero elige una de sus comunas (solo las del jugador pueden ir a estudiar)
+    printf("\nSus comunas:\n");
+    int cantidadComunas = 0;
 
-    // La persona se busca en la tabla hash
-    struct Persona *persona = buscarPersonaTabla(tabla, nombre);
+    for (struct ComunaAdministrada *actual = jugador->comunas; actual != NULL; actual = actual->siguiente) {
+        cantidadComunas++;
+        printf("%4d. %s\n", cantidadComunas, actual->comuna->nombre);
+    }
 
-    if (persona == NULL || persona->comuna == NULL) {
-        printf("No hay ninguna persona llamada \"%s\"\n", nombre);
+    int numeroComuna = leerEntero("Numero de la comuna", 1, cantidadComunas);
+    struct ComunaAdministrada *elegida = jugador->comunas;
+
+    for (int i = 1; i < numeroComuna; i++) {
+        elegida = elegida->siguiente;
+    }
+
+    struct Comuna *comuna = elegida->comuna;
+
+    // Despues elige a la persona por numero de la lista de esa comuna
+    printf("\nPersonas de %s:\n", comuna->nombre);
+    printf("   0. Volver\n");
+    int cantidad = imprimirPersonasComuna(tabla, comuna);
+    int numeroPersona = leerEntero("Numero de la persona", 0, cantidad);
+
+    if (numeroPersona == 0) {
         return;
     }
 
-    struct Comuna *comuna = persona->comuna;
-
-    // Solo las personas de las comunas del jugador
-    if (!estaAdministrada(jugador, comuna)) {
-        printf("%s vive en %s, que no es una de sus comunas\n", persona->nombre, comuna->nombre);
-        return;
-    }
+    struct Persona *persona = personaNumero(tabla, comuna, numeroPersona);
 
     printf("%s va a la biblioteca de %s\n", persona->nombre, comuna->nombre);
 
@@ -710,7 +703,7 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
             verPersonasComuna(sociedad, tabla);
         }
         if (opcion == 9) {
-            buscarPersonaMenu(tabla);
+            buscarPersonaMenu(sociedad, tabla);
         }
         if (opcion == 10) {
             irABiblioteca(sociedad, tabla, catalogo, jugador);
@@ -723,19 +716,14 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
 
             if (!estaAdministrada(jugador, comuna)) {
                 printf("Solo puede usar el celular de sus comunas (las marcadas con *)\n");
-            } else if (abrirCelular(comuna)) {
+            } else if (abrirCelular(comuna, sociedad, tabla, catalogo)) {
                 return AUTODESTRUCCION;
             }
         }
     }
 }
 
-// Funcion para anunciar cada liberacion de memoria (solo en la autodestruccion)
-static void anunciarLiberacion(int anunciar, const char *texto) {
-    if (anunciar) {
-        printf("%s... listo\n", texto);
-    }
-}
+
 
 // ---------- Juego ----------
 
@@ -862,23 +850,17 @@ void iniciarJuego(void) {
         }
 
         // Al salir, libera la lista del jugador (solo sus nodos) y la sociedad
-        anunciarLiberacion(autodestruccion, "Liberando la lista de comunas del jugador");
         liberarJugador(&jugador);
-        anunciarLiberacion(autodestruccion, "Liberando las comunas: bienes, servicios y la cache de cada biblioteca (lista doble + splay)");
         liberarComunas(sociedad);
     }
 
     // Libera el catalogo (AVL); la cache de cada comuna ya se libero con liberarComunas
-    anunciarLiberacion(autodestruccion, "Liberando el catalogo de libros (AVL)");
     liberarCatalogo(&catalogo);
 
     // Libera los datos cargados de los archivos
-    anunciarLiberacion(autodestruccion, "Liberando las personas y sus servicios (tabla hash)");
     liberarTablaPersonas(&tabla);
-    anunciarLiberacion(autodestruccion, "Liberando los catalogos de bienes y servicios");
     liberarRecursos(catalogoBienes);
     liberarRecursos(catalogoServicios);
-    anunciarLiberacion(autodestruccion, "Liberando los nombres de las comunas");
     liberarComunas(nombresComunas);
 
     if (autodestruccion) {

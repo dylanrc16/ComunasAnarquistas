@@ -2,7 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 #include "Celular.h"
+#include "Sociedad.h"
+#include "Indices.h"
 
 // Ancho de la pantalla del celular (sin los bordes)
 #define ANCHO_PANTALLA 30
@@ -55,9 +58,38 @@ static void bordeCelular(void) {
     printf("+\n");
 }
 
-// Funcion para dibujar una linea de texto dentro de la pantalla
+// Funcion para saber si un byte es la continuacion de una letra UTF-8
+// (letras como la a con tilde o la enie ocupan 2 bytes; los de continuacion son 10xxxxxx)
+static int esContinuacionUtf8(unsigned char byte) {
+    return (byte & 0xC0) == 0x80;
+}
+
+// Funcion para dibujar una linea de texto dentro de la pantalla.
+// Cuenta letras y no bytes, para que las tildes no descuadren el borde.
 static void lineaCelular(const char *texto) {
-    printf("   | %-*.*s |\n", ANCHO_PANTALLA, ANCHO_PANTALLA, texto);
+    int letras = 0;
+    int i = 0;
+
+    printf("   | ");
+
+    // Copia hasta ANCHO_PANTALLA letras (una letra puede tener varios bytes)
+    while (texto[i] != '\0') {
+        if (!esContinuacionUtf8((unsigned char) texto[i])) {
+            if (letras == ANCHO_PANTALLA) {
+                break;
+            }
+            letras++;
+        }
+        putchar(texto[i]);
+        i++;
+    }
+
+    // Rellena con espacios hasta el ancho de la pantalla
+    for (; letras < ANCHO_PANTALLA; letras++) {
+        putchar(' ');
+    }
+
+    printf(" |\n");
 }
 
 // Funcion para dibujar la barra de arriba: nombre de la comuna y bateria
@@ -158,10 +190,438 @@ static void explosion(void) {
     pausa(500);
 }
 
+// ---------- App Biblioteca ----------
+
+// Funcion para empezar una pantalla: borde, barra de estado, titulo y separador
+static void inicioPantalla(const struct Comuna *comuna, const char *titulo) {
+    printf("\n");
+    bordeCelular();
+    barraEstado(comuna);
+    lineaCelular("------------------------------");
+    lineaCelular(titulo);
+    lineaCelular("");
+}
+
+// Funcion para leer una opcion de texto (la primera letra en minuscula).
+// Devuelve 'x' si se cierra la entrada.
+static char leerLetra(const char *mensaje) {
+    char linea[100];
+    printf("%s: ", mensaje);
+
+    if (fgets(linea, sizeof(linea), stdin) == NULL) {
+        return 'x';
+    }
+
+    return (char) tolower((unsigned char) linea[0]);
+}
+
+// Funcion para pedir un texto en el celular (quita el salto de linea)
+static void leerTextoCelular(const char *mensaje, char *destino, int tamano) {
+    printf("%s: ", mensaje);
+
+    if (fgets(destino, tamano, stdin) == NULL) {
+        destino[0] = '\0';
+        return;
+    }
+
+    destino[strcspn(destino, "\r\n")] = '\0';
+}
+
+// Funcion para explicar por que una opcion de paginas no hizo nada
+// (se llama solo cuando la opcion no se pudo hacer)
+static void avisoOpcion(char letra) {
+    if (letra == 's') {
+        printf("No hay mas paginas. Use A para volver atras o X para salir.\n");
+    } else if (letra == 'a') {
+        printf("Ya esta en la primera pagina. Use S para avanzar o X para salir.\n");
+    } else {
+        printf("Opcion no valida: use S, A o X.\n");
+    }
+}
+
+// Funcion para recorrer el AVL en orden e imprimir solo los libros de una pagina.
+// contador lleva la posicion del libro actual en orden alfabetico.
+static void listarPagina(struct NodoAvl *nodo, int desde, int hasta, int *contador) {
+    if (nodo == NULL || *contador >= hasta) {
+        return;
+    }
+
+    listarPagina(nodo->izquierdo, desde, hasta, contador);
+
+    if (*contador >= desde && *contador < hasta) {
+        char linea[64];
+        snprintf(linea, sizeof(linea), "%3d. %.50s", *contador + 1, nodo->nombre);
+        lineaCelular(linea);
+    }
+    (*contador)++;
+
+    listarPagina(nodo->derecho, desde, hasta, contador);
+}
+
+// Funcion para ver los libros del catalogo, de 8 en 8, en orden alfabetico
+static void verLibros(struct Comuna *comuna, const struct Catalogo *catalogo) {
+    int paginas = (catalogo->cantidadLibros + LIBROS_POR_PAGINA - 1) / LIBROS_POR_PAGINA;
+    int pagina = 0;
+
+    while (1) {
+        if (!gastarBateria(comuna, GASTO_PAGINA)) {
+            printf("Se acabo la bateria.\n");
+            return;
+        }
+
+        char titulo[64];
+        snprintf(titulo, sizeof(titulo), "LIBROS  (pagina %d de %d)", pagina + 1, paginas);
+        inicioPantalla(comuna, titulo);
+
+        int contador = 0;
+        listarPagina(catalogo->libros, pagina * LIBROS_POR_PAGINA, (pagina + 1) * LIBROS_POR_PAGINA, &contador);
+
+        lineaCelular("");
+        lineaCelular("[S] Sig  [A] Ant  [X] Volver");
+        bordeCelular();
+
+        // Pide la opcion hasta que sea valida (asi no se gasta bateria redibujando)
+        while (1) {
+            char letra = leerLetra("Opcion");
+
+            if (letra == 'x') {
+                return;
+            }
+            if (letra == 's' && pagina < paginas - 1) {
+                pagina++;
+                break;
+            }
+            if (letra == 'a' && pagina > 0) {
+                pagina--;
+                break;
+            }
+            avisoOpcion(letra);
+        }
+    }
+}
+
+// Funcion para buscar un libro por nombre exacto en el AVL
+static void buscarNombreCelular(struct Comuna *comuna, const struct Catalogo *catalogo) {
+    if (!gastarBateria(comuna, GASTO_BUSQUEDA_CACHE)) {
+        printf("Se acabo la bateria.\n");
+        return;
+    }
+
+    char nombre[256];
+    leerTextoCelular("Nombre exacto del libro", nombre, sizeof(nombre));
+
+    inicioPantalla(comuna, "BUSCAR POR NOMBRE (AVL)");
+    lineaCelular(nombre);
+    lineaCelular(existeLibro(catalogo, nombre) ? "Si esta en la biblioteca" : "No esta en la biblioteca");
+    bordeCelular();
+}
+
+// Funcion para buscar un texto con la cache de la biblioteca de la comuna.
+// Un acierto gasta poca bateria; un fallo gasta mas porque lee los archivos.
+static void buscarTextoCelular(struct Comuna *comuna, const struct Catalogo *catalogo) {
+    if (comuna->bateria < GASTO_BUSQUEDA_ARCHIVOS) {
+        printf("No hay bateria suficiente para buscar (hace falta %d%%).\n", GASTO_BUSQUEDA_ARCHIVOS);
+        return;
+    }
+
+    char texto[256];
+    leerTextoCelular("Texto a buscar", texto, sizeof(texto));
+
+    if (texto[0] == '\0') {
+        return;
+    }
+
+    int fueAcierto;
+    comuna->biblioteca.cache = buscarTexto(catalogo, comuna->biblioteca.cache, texto, &fueAcierto);
+    comuna->biblioteca.busquedas++;
+
+    if (fueAcierto) {
+        comuna->biblioteca.aciertos++;
+        gastarBateria(comuna, GASTO_BUSQUEDA_CACHE);
+    } else {
+        gastarBateria(comuna, GASTO_BUSQUEDA_ARCHIVOS);
+    }
+
+    struct NodoSplay *resultado = comuna->biblioteca.cache;
+    char linea[64];
+
+    inicioPantalla(comuna, "BUSCAR TEXTO (cache splay)");
+    snprintf(linea, sizeof(linea), "\"%.50s\"", resultado->texto);
+    lineaCelular(linea);
+    snprintf(linea, sizeof(linea), "%s: %d libros", fueAcierto ? "Acierto, -1%" : "Fallo, -5%", resultado->cantidadLibros);
+    lineaCelular(linea);
+    lineaCelular("");
+
+    int mostrados = 0;
+    for (struct LibroEncontrado *libro = resultado->libros; libro != NULL && mostrados < 5; libro = libro->siguiente) {
+        snprintf(linea, sizeof(linea), " - %.50s", libro->nombre);
+        lineaCelular(linea);
+        mostrados++;
+    }
+
+    if (resultado->cantidadLibros > mostrados) {
+        snprintf(linea, sizeof(linea), "   ... y %d mas", resultado->cantidadLibros - mostrados);
+        lineaCelular(linea);
+    }
+
+    bordeCelular();
+}
+
+// Funcion para calcular cuantos bytes del texto caben en una linea de la pantalla,
+// cortando en el ultimo espacio para no partir palabras.
+// En *siguiente deja donde empieza el resto del texto (sin el espacio del corte).
+static int cortarLinea(const char *texto, const char **siguiente) {
+    int letras = 0;
+    int ultimoEspacio = -1;
+    int i = 0;
+
+    while (texto[i] != '\0') {
+        if (!esContinuacionUtf8((unsigned char) texto[i])) {
+            if (letras == ANCHO_PANTALLA) {
+                break;
+            }
+            letras++;
+        }
+        if (texto[i] == ' ') {
+            ultimoEspacio = i;
+        }
+        i++;
+    }
+
+    // Todo el resto cabe en la linea
+    if (texto[i] == '\0') {
+        *siguiente = texto + i;
+        return i;
+    }
+
+    // Corta en el ultimo espacio; si la palabra es mas larga que la pantalla, la parte
+    if (ultimoEspacio > 0) {
+        *siguiente = texto + ultimoEspacio + 1;
+        return ultimoEspacio;
+    }
+
+    *siguiente = texto + i;
+    return i;
+}
+
+// Funcion para mostrar una pagina de un libro. Las lineas largas del archivo se
+// parten en varias lineas de la pantalla. Devuelve 1 si hay mas paginas.
+static int mostrarPaginaLibro(const char *ruta, int pagina) {
+    FILE *archivo = fopen(ruta, "r");
+
+    if (archivo == NULL) {
+        lineaCelular("(no se pudo abrir el libro)");
+        return 0;
+    }
+
+    int desde = pagina * LINEAS_POR_PAGINA;
+    int hasta = desde + LINEAS_POR_PAGINA;
+    int numero = 0;     // numero de la linea de pantalla actual
+    int hayMas = 0;
+    char linea[1024];
+
+    while (!hayMas && fgets(linea, sizeof(linea), archivo) != NULL) {
+        linea[strcspn(linea, "\r\n")] = '\0';
+
+        // Cambia tabulaciones y otros caracteres de control por espacios
+        for (int i = 0; linea[i] != '\0'; i++) {
+            if ((unsigned char) linea[i] < 32) {
+                linea[i] = ' ';
+            }
+        }
+
+        // Parte la linea en pedazos que caben (una linea vacia cuenta como una)
+        const char *resto = linea;
+
+        do {
+            // Ya se lleno la pagina y todavia queda texto: hay otra pagina
+            if (numero >= hasta) {
+                hayMas = 1;
+                break;
+            }
+
+            const char *siguiente;
+            int bytes = cortarLinea(resto, &siguiente);
+
+            if (numero >= desde) {
+                char pedazo[sizeof(linea)];
+                snprintf(pedazo, sizeof(pedazo), "%.*s", bytes, resto);
+                lineaCelular(pedazo);
+            }
+
+            numero++;
+            resto = siguiente;
+        } while (*resto != '\0');
+    }
+
+    fclose(archivo);
+
+    // Si la pagina quedo corta, completa con lineas vacias para que el celular no cambie de tamano
+    for (; numero < hasta; numero++) {
+        if (numero >= desde) {
+            lineaCelular("");
+        }
+    }
+
+    return hayMas;
+}
+
+// Funcion para leer un numero entre minimo y maximo (repite hasta que sea valido).
+// Devuelve minimo si se cierra la entrada.
+static int leerNumeroCelular(const char *mensaje, int minimo, int maximo) {
+    char linea[100];
+
+    while (1) {
+        printf("%s (%d-%d): ", mensaje, minimo, maximo);
+
+        if (fgets(linea, sizeof(linea), stdin) == NULL) {
+            return minimo;
+        }
+
+        char *fin;
+        long numero = strtol(linea, &fin, 10);
+
+        if (fin != linea && numero >= minimo && numero <= maximo) {
+            return (int) numero;
+        }
+
+        printf("Escriba un numero entre %d y %d.\n", minimo, maximo);
+    }
+}
+
+// Funcion para elegir quien lee: muestra las personas de la comuna con un numero.
+// Devuelve la persona elegida o NULL si se eligio 0 (nadie en especial).
+static struct Persona *elegirLector(struct TablaPersonas *tabla, const struct Comuna *comuna) {
+    printf("\nPersonas de %s:\n", comuna->nombre);
+    printf("   0. Nadie en especial (la lectura no cuenta para aprender)\n");
+
+    int cantidad = imprimirPersonasComuna(tabla, comuna);
+    int opcion = leerNumeroCelular("Quien lee?", 0, cantidad);
+
+    if (opcion == 0) {
+        return NULL;
+    }
+
+    return personaNumero(tabla, comuna, opcion);
+}
+
+// Funcion para leer un libro pagina por pagina. Si lee una persona de la comuna
+// y llega a PAGINAS_PARA_LEER paginas, el libro cuenta para su servicio en estudio.
+static void leerLibroCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo) {
+    char nombre[256];
+    leerTextoCelular("Nombre exacto del libro", nombre, sizeof(nombre));
+
+    // El AVL confirma que el libro existe antes de abrirlo
+    if (!existeLibro(catalogo, nombre)) {
+        printf("El libro \"%s\" no esta en la biblioteca.\n", nombre);
+        return;
+    }
+
+    // Quien lee: se elige por numero entre las personas de la comuna
+    struct Persona *lector = elegirLector(tabla, comuna);
+
+    char ruta[1024];
+    snprintf(ruta, sizeof(ruta), "%s/%s", catalogo->carpeta, nombre);
+
+    int pagina = 0;
+    int paginasLeidas = 0;
+    int contado = 0;
+
+    while (1) {
+        if (!gastarBateria(comuna, GASTO_PAGINA)) {
+            printf("Se acabo la bateria. El celular se apago a media lectura.\n");
+            return;
+        }
+
+        char titulo[64];
+        snprintf(titulo, sizeof(titulo), "%.20s  pag. %d", nombre, pagina + 1);
+        inicioPantalla(comuna, titulo);
+        int hayMas = mostrarPaginaLibro(ruta, pagina);
+        lineaCelular("");
+        lineaCelular(hayMas ? "[S] Sig  [A] Ant  [X] Cerrar" : "(fin)    [A] Ant  [X] Cerrar");
+        bordeCelular();
+
+        paginasLeidas++;
+
+        // Al leer suficientes paginas (o el libro completo), cuenta como leido
+        if (lector != NULL && !contado && (paginasLeidas >= PAGINAS_PARA_LEER || !hayMas)) {
+            contado = 1;
+
+            if (yaLeyo(lector, nombre)) {
+                printf("%s ya habia leido este libro.\n", lector->nombre);
+            } else {
+                char servicio[50];
+                snprintf(servicio, sizeof(servicio), "%s", lector->servicioEnEstudio);
+
+                if (leerLibro(lector, nombre)) {
+                    printf("%s termino de leer y aprendio %s!\n", lector->nombre, servicio);
+                    recalcularServicios(sociedad, tabla);
+                    actualizarIndices(sociedad);
+                } else if (servicio[0] != '\0') {
+                    printf("%s leyo el libro (%d/%d para %s).\n", lector->nombre,
+                           lector->librosParaServicio, LIBROS_PARA_APRENDER, servicio);
+                } else {
+                    printf("%s leyo el libro (no esta estudiando ningun servicio).\n", lector->nombre);
+                }
+            }
+        }
+
+        // Pide la opcion hasta que sea valida (asi no se gasta bateria redibujando)
+        while (1) {
+            char letra = leerLetra("Opcion");
+
+            if (letra == 'x') {
+                return;
+            }
+            if (letra == 's' && hayMas) {
+                pagina++;
+                break;
+            }
+            if (letra == 'a' && pagina > 0) {
+                pagina--;
+                break;
+            }
+            avisoOpcion(letra);
+        }
+    }
+}
+
+// Funcion para la app Biblioteca: su propio menu dentro del celular
+static void appBiblioteca(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo) {
+    while (1) {
+        inicioPantalla(comuna, "BIBLIOTECA");
+        lineaCelular("  1. Ver los libros");
+        lineaCelular("  2. Buscar por nombre");
+        lineaCelular("  3. Buscar un texto");
+        lineaCelular("  4. Leer un libro");
+        lineaCelular("");
+        lineaCelular("  0. Volver");
+        bordeCelular();
+
+        char letra = leerLetra("Opcion");
+
+        if (letra == '0' || letra == 'x') {
+            return;
+        }
+        if (letra == '1') {
+            verLibros(comuna, catalogo);
+        }
+        if (letra == '2') {
+            buscarNombreCelular(comuna, catalogo);
+        }
+        if (letra == '3') {
+            buscarTextoCelular(comuna, catalogo);
+        }
+        if (letra == '4') {
+            leerLibroCelular(comuna, sociedad, tabla, catalogo);
+        }
+    }
+}
+
 // ---------- Celular ----------
 
 // Funcion para abrir el celular comunitario de una comuna
-int abrirCelular(struct Comuna *comuna) {
+int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo) {
     if (!gastarBateria(comuna, GASTO_ENCENDER)) {
         printf("El celular de %s no tiene bateria (%d%%). Espere a que el sol lo cargue.\n",
                comuna->nombre, comuna->bateria);
@@ -187,7 +647,10 @@ int abrirCelular(struct Comuna *comuna) {
             printf("El celular de %s se apago.\n", comuna->nombre);
             return 0;
         }
-        if (opcion >= 1 && opcion <= 3) {
+        if (opcion == 1) {
+            appBiblioteca(comuna, sociedad, tabla, catalogo);
+        }
+        if (opcion == 2 || opcion == 3) {
             printf("Esta app todavia se esta instalando...\n");
         }
         if (opcion == 4) {

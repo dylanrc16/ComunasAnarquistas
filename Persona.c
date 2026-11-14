@@ -197,3 +197,24 @@ int leerLibro(struct Persona *persona, const char *libro) {
     persona->librosParaServicio = 0;
     return 1;
 }
+
+// Funcion para imprimir una persona en una linea: nombre, servicios y estudio
+void imprimirPersona(const struct Persona *persona) {
+    printf("%-24s ", persona->nombre);
+
+    if (persona->servicios == NULL) {
+        printf("(no sabe ningun servicio)");
+    }
+
+    for (struct Servicio *servicio = persona->servicios; servicio != NULL; servicio = servicio->siguiente) {
+        printf("%s%s", servicio->nombre, servicio->siguiente != NULL ? ", " : "");
+    }
+
+    // Si esta estudiando algo, muestra cuanto lleva
+    if (persona->servicioEnEstudio[0] != '\0') {
+        printf("  [estudia %s: %d/%d libros]", persona->servicioEnEstudio,
+               persona->librosParaServicio, LIBROS_PARA_APRENDER);
+    }
+
+    printf("\n");
+}

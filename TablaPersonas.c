@@ -117,6 +117,44 @@ void imprimirEstadisticasTabla(const struct TablaPersonas *tabla) {
            usadas, tabla->cantidad - usadas, masLarga);
 }
 
+// Funcion para imprimir numeradas a las personas de una comuna.
+// La tabla no tiene orden, asi que se recorre completa y se filtra por comuna.
+int imprimirPersonasComuna(const struct TablaPersonas *tabla, const struct Comuna *comuna) {
+    int cantidad = 0;
+
+    for (int i = 0; i < TAMANO_TABLA; i++) {
+        for (struct Persona *persona = tabla->casillas[i]; persona != NULL; persona = persona->siguiente) {
+            if (persona->comuna == comuna) {
+                cantidad++;
+                printf("%4d. ", cantidad);
+                imprimirPersona(persona);
+            }
+        }
+    }
+
+    return cantidad;
+}
+
+// Funcion para obtener la persona numero "posicion" de una comuna.
+// Recorre la tabla en el mismo orden que imprimirPersonasComuna, asi el numero coincide.
+struct Persona *personaNumero(const struct TablaPersonas *tabla, const struct Comuna *comuna, int posicion) {
+    int contador = 0;
+
+    for (int i = 0; i < TAMANO_TABLA; i++) {
+        for (struct Persona *persona = tabla->casillas[i]; persona != NULL; persona = persona->siguiente) {
+            if (persona->comuna == comuna) {
+                contador++;
+
+                if (contador == posicion) {
+                    return persona;
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+
 // Funcion para liberar todas las personas: libera la lista de cada casilla
 void liberarTablaPersonas(struct TablaPersonas *tabla) {
     for (int i = 0; i < TAMANO_TABLA; i++) {
