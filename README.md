@@ -20,6 +20,13 @@ Duvan Asenjo
 5. [Pruebas](#pruebas)
 6. [Estructuras de datos](#estructuras-de-datos)
 7. [La biblioteca](#la-biblioteca)
+8. [Un día de simulación](#un-día-de-simulación)
+9. [Modelo de la sociedad](#modelo-de-la-sociedad)
+10. [Índices](#índices)
+11. [Disolución de comunas](#disolución-de-comunas)
+12. [Emergencias](#emergencias)
+13. [La economía: regalo y ayuda mutua](#la-economía-regalo-y-ayuda-mutua)
+14. [Parámetros de diseño](#parámetros-de-diseño)
 
 ---
 
@@ -258,36 +265,37 @@ Hay **un solo catálogo** (el AVL con los nombres de los libros), compartido por
 
 ## Un día de simulación
 
-A partir del día 2, el programa ejecuta en este orden:
+Cada día (`simularDia`, en `Juego.c`) ocurre en este orden:
 
-1. `consumirRecursos`: las personas gastan bienes y servicios.
-2. `producirRecursos`: las comunas producen.
-3. `decaerEfectos`: la penalización y la solidaridad bajan 2 puntos.
-4. `avanzarEmergencias`: si toca, ocurre una emergencia.
-5. `actualizarIndices`: se recalculan necesidad y satisfacción.
-6. Se muestra el estado y la persona usuaria decide qué intercambios hacer. Después de cada regalo se recalculan los índices.
+1. `consumirRecursos`: las personas gastan bienes.
+2. `producirRecursos`: las comunas producen bienes.
+3. `cargarCelulares`: el sol carga la batería del celular de cada comuna.
+4. `decaerEfectos`: la penalización, la solidaridad y el apoyo recibido bajan 2 puntos.
+5. `recalcularServicios`: los servicios se vuelven a contar a partir de lo que saben las personas.
+6. `ayudaAutonoma`: las comunas que no administra la persona usuaria se ayudan solas.
+7. `avanzarEmergencias`: si toca, ocurre una emergencia.
+8. `actualizarIndices`: se recalculan necesidad, reciprocidad y satisfacción.
+9. `revisarDisoluciones`: se cuentan los días en crisis y se disuelven las comunas que llevan 3.
 
-El día 1 muestra el estado inicial, sin consumo ni producción.
+Después se muestra el estado y la persona usuaria decide qué hacer. Después de cada regalo o de aprender un servicio, los índices se recalculan.
 
 ## Modelo de la sociedad
 
-**Población.** Son 500 personas, repartidas en partes iguales entre las comunas elegidas. Las que sobran se reparten de a una a las primeras comunas, así que siempre suman 500.
+**Población.** Son 500 personas, cargadas en la tabla hash y repartidas en ronda entre las comunas elegidas, así que siempre suman 500. Cada persona guarda un puntero a su comuna, así que mudarse es solo cambiar ese puntero.
 
-**Recursos.** Cada comuna tiene los bienes y servicios elegidos, cada uno con una existencia y un máximo calculados a partir de su población:
+**Bienes.** Cada comuna tiene los bienes elegidos, con un máximo de **2 por persona** y una existencia inicial entre 40% y 80% del máximo. Cada día se consumen y se producen:
 
-- Máximo de un bien: 2 por persona.
-- Máximo de un servicio: 1 por cada 10 personas, redondeado hacia arriba.
-- Existencia inicial: entre 40% y 80% del máximo. Varía de una comuna a otra y de un recurso a otro.
+- Cada comuna tiene su propio porcentaje de consumo y de producción, sorteados al iniciar entre 2.00% y 5.00%.
+- Cada día, cada bien baja `personas × consumo / 100` y sube `personas × producción / 100`, sin pasar de su máximo.
+- `redondearAlAzar` (en `Recurso.c`) usa la parte decimal como probabilidad de redondear hacia arriba: un gasto de 2.3 resta 3 con 30% de probabilidad y 2 con 70%. Así, en promedio, cada comuna gasta exactamente lo que le corresponde.
 
-**Consumo.** Cada comuna tiene su propio porcentaje de consumo, sorteado al iniciar entre 2.00% y 5.00%. Cada día, cada bien baja `personas × porcentaje / 100` y cada servicio baja la décima parte de eso (igual que su máximo, que es 1 por cada 10 personas).
+**Servicios: los saben las personas.** En el Proyecto 2 un servicio no es un número que sube y baja, sino **cuántas personas de la comuna lo saben hacer**:
 
-**Producción.** Cada comuna tiene su propio porcentaje de producción, sorteado al iniciar entre 2.00% y 5.00%. Cada día, cada bien sube `personas × porcentaje / 100` y cada servicio la décima parte de eso. Nada pasa de su máximo.
+- Al iniciar, cada persona recibe servicios al azar: 30% no sabe ninguno, 50% sabe uno y 20% sabe dos.
+- El máximo de cada servicio es **1 por cada 10 personas** (lo que la comuna necesita). La existencia es cuántas personas lo saben, con tope en ese máximo: tener 3 doctoras no compensa que falte transporte.
+- Por eso los servicios no se consumen ni se producen. Cambian cuando alguien se muda, cuando alguien aprende uno en la biblioteca o cuando una emergencia los interrumpe ese día.
 
-**Redondeo al azar.** Las existencias son enteras, pero el gasto y la producción tienen decimales. Para no perder esos decimales, `redondearAlAzar` (en `Recurso.c`) usa la parte decimal como probabilidad de redondear hacia arriba: un gasto de 2.3 resta 3 con 30% de probabilidad y 2 con 70%. Así, en promedio, cada comuna gasta exactamente lo que le corresponde, y dos comunas con porcentajes distintos gastan distinto aunque tengan pocas personas.
-
-Los porcentajes de consumo y producción se combinan de forma distinta en cada comuna. Así, algunas se mantienen estables, otras se van quedando sin bienes y otras acumulan excedente. Esa diferencia es lo que hace que regalar tenga sentido.
-
-## Índices de necesidad y satisfacción
+## Índices
 
 ### Necesidad
 
@@ -297,30 +305,52 @@ Mide cuánto falta para llegar al máximo, sumando todos los bienes y servicios 
 necesidad = 100 × (suma de lo que falta) / (suma de los máximos)
 ```
 
-El resultado se limita al rango **5 a 95**. Nunca llega a 100 (siempre hay necesidades adicionales o emergencias) y tampoco a 0.
+Se limita al rango **5 a 95**: nunca llega a 100 (siempre hay necesidades adicionales) ni a 0. **La necesidad no cambió respecto al Proyecto 1.**
+
+### Reciprocidad
+
+Mide si una comuna da y recibe en equilibrio a lo largo del tiempo. No es una deuda: nadie le debe nada a nadie, pero una comuna que solo recibe o solo da está menos integrada.
+
+```
+balance       = 1 − |dados − recibidos| / (dados + recibidos)
+participacion = (dados + recibidos) / 6, con tope de 1
+reciprocidad  = 50 + 50 × participacion × (2 × balance − 1)
+```
+
+- Sin intercambios vale **50** (neutral), para no castigar a nadie al inicio.
+- Un regalo aislado casi no la mueve; lo que cuenta es el patrón. Con 6 o más intercambios, una comuna equilibrada llega a 100 y una que solo da o solo recibe baja a 0.
 
 ### Satisfacción
 
-Mide cómo se siente la gente con su propia comuna y con las comunas de alrededor:
+Es el índice que cambia en el Proyecto 2:
 
 ```
-satisfaccion = 0.6 × (100 − necesidad propia)
-             + 0.4 × (promedio de 100 − necesidad de las comunas cercanas)
-             + solidaridad
-             − penalizacion
+satisfaccion = 0.4 × (100 − necesidad propia)
+             + 0.2 × promedio de (100 − necesidad) de las vecinas
+             + 0.2 × promedio de la satisfacción anterior de las vecinas
+             + 0.2 × reciprocidad
+             + apoyo recibido + solidaridad − penalizacion
 ```
 
-El resultado se limita al rango 0 a 100.
+Se limita al rango 0 a 100.
 
-- **Comunas cercanas:** las 2 anteriores y las 2 siguientes en la lista doble, es decir, hasta 4 comunas (menos si la comuna está en un extremo de la lista).
-- **Pesos 0.6 y 0.4:** la gente se siente bien sobre todo por lo que tiene su propia comuna, pero también influye cómo están las de alrededor.
-- **Penalización:** sube cuando una comuna cercana sufre una emergencia.
-- **Solidaridad:** sube cuando la comuna regala algo, con un tope de 15.
-- Ambas bajan 2 puntos una vez por día (`decaerEfectos`), así que sus efectos se apagan con el tiempo. No bajan al recalcular los índices después de un regalo.
-
-La satisfacción de una comuna depende de la necesidad de sus vecinas, por eso `actualizarIndices` calcula primero todas las necesidades y después todas las satisfacciones.
+- **Vecinas:** las 2 comunas anteriores y las 2 siguientes en la lista doble.
+- **Satisfacción de las vecinas:** se usa la del cálculo anterior. Si no, la de A dependería de la de B y la de B de la de A, en círculo. `actualizarIndices` guarda primero una copia de todas las satisfacciones y después calcula las nuevas, así el orden de la lista no cambia el resultado. Al iniciar se llama 2 veces para que los valores se asienten.
+- **Solidaridad:** +5 para quien regala. **Apoyo recibido:** +5 para quien recibe. Ambos tienen tope de 15.
+- **Penalización:** +10 cuando una comuna vecina sufre una emergencia.
+- Solidaridad, apoyo y penalización bajan 2 puntos por día, así que sus efectos se apagan con el tiempo.
 
 **La sociedad se evalúa con el promedio de satisfacción de todas las comunas**, que se muestra cada día.
+
+## Disolución de comunas
+
+Una comuna está **en crisis** si su necesidad es **85 o más** o su satisfacción es **25 o menos**. Si pasa **3 días seguidos** en crisis, se disuelve:
+
+1. Sus personas se mudan en ronda a las comunas vecinas (y se llevan sus servicios y lo que han estudiado).
+2. Se saca de la lista doble y se libera.
+3. Si era de la persona usuaria, se saca de su lista y pierde una vida. Si todavía le quedan vidas, elige otra comuna para administrar.
+
+Si sale de la crisis antes de los 3 días, la cuenta vuelve a empezar. La partida se pierde con **3 vidas perdidas** o si en la sociedad quedan **menos de 3 comunas**.
 
 ## Emergencias
 
@@ -328,6 +358,7 @@ Cada **3 a 7 días** (sorteado cada vez) ocurre una emergencia:
 
 1. Se elige una comuna al azar.
 2. Cada uno de sus bienes y servicios tiene **50%** de probabilidad de ser afectado, y si lo es pierde entre **10% y 50%** de su existencia. Todo es aleatorio: la comuna, cuáles recursos y cuánto.
+   Los bienes perdidos hay que volver a producirlos. Los servicios, en cambio, solo se **interrumpen ese día**: al día siguiente `recalcularServicios` los vuelve a contar a partir de las personas, porque la gente no olvida lo que sabe.
 3. Las 2 comunas anteriores y las 2 siguientes reciben **+10 de penalización**, lo que baja su satisfacción.
 
 ## La economía: regalo y ayuda mutua
@@ -337,17 +368,24 @@ Cada **3 a 7 días** (sorteado cada vez) ocurre una emergencia:
 - **Economía del regalo.** El antropólogo Marcel Mauss la estudió en su *Ensayo sobre el don* (1925). En muchas sociedades las cosas circulan como regalos y no como mercancías: dar crea vínculos y prestigio social, y no una deuda monetaria. Ejemplos clásicos son el potlatch de pueblos de la costa noroeste de Norteamérica y el anillo Kula en las islas Trobriand.
 - **Ayuda mutua.** El anarquista Piotr Kropotkin la desarrolló en *La ayuda mutua: un factor de la evolución* (1902). Sostiene que la cooperación es tan importante como la competencia para la supervivencia, y de ahí viene el principio comunista libertario de "de cada quien según su capacidad, a cada quien según su necesidad".
 
-### En el código
+### En el código (`Economia.c`)
 
-Está en `regalarRecurso` (`Economia.c`). Una comuna entrega parte de un bien o servicio a otra, y:
+**Regalar un bien** (`regalarRecurso`):
 
 - **Solo se regala el excedente.** A quien regala nunca le queda menos del **40% de su máximo**. Es la parte de "según su capacidad": nadie se queda sin lo básico por dar.
 - **Quien recibe no puede pasar de su máximo.** Si el regalo es mayor, se recorta a lo que le cabe.
-- **No hay contrapartida ni deuda.** El programa no guarda quién le dio qué a quién, para no reproducir el dinero con otro nombre.
-- **Quien regala gana solidaridad** (+5), que sube su satisfacción un tiempo. Es un reconocimiento social, no algo que se pueda acumular ni canjear: tiene un tope de 15 y baja 2 puntos por día.
-- **Los intercambios los decide la persona usuaria**, como pide la especificación.
 
-Un ejemplo: una comuna que tiene mucho de un bien (por ejemplo, porque produce más de lo que consume) puede regalar parte a otra que lo necesita. La que recibe sube su existencia, su necesidad baja y la satisfacción de ambas mejora.
+**Regalar un servicio** (`regalarServicio`): como el servicio lo sabe una persona, regalarlo es que **una persona se mude** a la otra comuna, con todo lo que sabe. La comuna que da debe conservar al menos otra persona que sepa ese servicio.
+
+**Cada regalo** suma 1 a los regalos dados de una comuna y a los recibidos de la otra (para la reciprocidad), da +5 de solidaridad a quien regala y +5 de apoyo a quien recibe. No se guarda **quién** le dio qué a quién, para no reproducir el dinero con otro nombre.
+
+**Ayuda mutua autónoma** (`ayudaAutonoma`): las comunas que no administra la persona usuaria se ayudan solas cada día.
+
+- Si una comuna tiene un bien sobre el **70%** de su máximo, regala el **10%** de su máximo a la comuna que más lo necesite, siempre que esa comuna esté **bajo el 40%**.
+- Si en una comuna hay más personas que saben un servicio de las que necesita, una se muda a una comuna donde nadie lo sabe (a lo sumo una mudanza por día).
+- Solo se anuncian en pantalla los regalos que reciben las comunas de la persona usuaria.
+
+Esto crea un incentivo sin obligación: las comunas autónomas ayudan a las de la persona usuaria, y la reciprocidad de esas comunas sube si ellas también devuelven ayuda.
 
 ## Parámetros de diseño
 
@@ -356,18 +394,25 @@ Todos son decisiones nuestras y están pensados para ajustarse fácilmente.
 | Parámetro | Valor | Dónde |
 |---|---|---|
 | Rango de la necesidad | 5 a 95 | `Indices.c` |
-| Peso propia / vecinas en la satisfacción | 0.6 / 0.4 | `Indices.c` |
+| Pesos de la satisfacción (propia / vecinas / satisfacción vecinas / reciprocidad) | 0.4 / 0.2 / 0.2 / 0.2 | `Indices.c` |
+| Intercambios para que la reciprocidad pese completa | 6 | `Indices.c` |
 | Comunas cercanas | 2 anteriores y 2 siguientes | `Indices.c`, `Emergencias.c` |
-| Bajada diaria de penalización y solidaridad | 2 puntos | `Indices.c` |
+| Bajada diaria de penalización, solidaridad y apoyo | 2 puntos | `Indices.c` |
+| Crisis | necesidad ≥ 85 o satisfacción ≤ 25 | `Sociedad.h` |
+| Días en crisis para disolverse | 3 | `Sociedad.h` |
+| Comunas administradas / vidas | 3 / 3 | `Jugador.h` |
 | Días entre emergencias | 3 a 7 | `Emergencias.c` |
 | Probabilidad de que un recurso sea afectado | 50% | `Emergencias.c` |
 | Pérdida por emergencia | 10% a 50% | `Emergencias.c` |
 | Penalización a las comunas cercanas | +10 | `Emergencias.c` |
-| Reserva de quien regala | 40% del máximo | `Economia.c` |
-| Bono de solidaridad por regalar | +5 (tope 15) | `Economia.c` |
-| Consumo / producción por comuna | 2.00% a 5.00%, al azar | `Consumo.c`, `Produccion.c` |
-| Consumo / producción de servicios | 1/10 de la de un bien | `Consumo.c`, `Produccion.c` |
+| Reserva de quien regala un bien | 40% del máximo | `Economia.c` |
+| Bono de solidaridad / de apoyo | +5 cada uno (tope 15) | `Economia.c` |
+| Ayuda autónoma: excedente / necesidad / regalo | 70% / 40% / 10% del máximo | `Economia.c` |
+| Consumo / producción de bienes por comuna | 2.00% a 5.00%, al azar | `Consumo.c`, `Produccion.c` |
 | Máximo de un bien / de un servicio | 2 por persona / 1 por cada 10 | `Sociedad.c` |
+| Servicios por persona al iniciar | 0 (30%), 1 (50%), 2 (20%) | `Sociedad.c` |
+| Libros para aprender un servicio | 3 | `Persona.h` |
+| Casillas de la tabla hash | 509 | `TablaPersonas.h` |
 
 ## Limitaciones conocidas
 
