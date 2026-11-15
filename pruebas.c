@@ -8,6 +8,7 @@
 #include "Avl.h"
 #include "Splay.h"
 #include "TablaPersonas.h"
+#include "Jugador.h"
 
 // Cuenta cuantas verificaciones fallaron
 static int fallos = 0;
@@ -412,6 +413,69 @@ static void probarTablaHash(void) {
     liberarTablaPersonas(&tabla);
 }
 
+// ---------- Comunas del jugador ----------
+
+// Funcion para probar la lista de comunas que administra el jugador:
+// agregar (maximo 3, sin repetir), quitar una (como al disolverse) y reemplazarla
+static void probarJugador(void) {
+    printf("\n== Lista simple: Jugador (comunas administradas) ==\n");
+
+    // Comunas de prueba (en el juego viven en la lista doble de la sociedad)
+    struct Comuna *a = crearComuna("A", 10);
+    struct Comuna *b = crearComuna("B", 10);
+    struct Comuna *c = crearComuna("C", 10);
+    struct Comuna *d = crearComuna("D", 10);
+
+    struct Jugador jugador;
+    iniciarJugador(&jugador);
+    verificar("el jugador empieza sin comunas y sin vidas perdidas",
+              jugador.comunas == NULL && jugador.vidasPerdidas == 0 && contarAdministradas(&jugador) == 0);
+
+    // Agregar
+    verificar("agregar A funciona", agregarAdministrada(&jugador, a) == 1);
+    verificar("agregar A otra vez no se permite (no se repite)", agregarAdministrada(&jugador, a) == 0);
+    verificar("agregar B y C funciona", agregarAdministrada(&jugador, b) == 1 && agregarAdministrada(&jugador, c) == 1);
+    verificar("ya administra 3 comunas", contarAdministradas(&jugador) == COMUNAS_ADMINISTRADAS);
+    verificar("agregar una cuarta (D) no se permite: maximo 3", agregarAdministrada(&jugador, d) == 0);
+    verificar("agregar NULL no se permite", agregarAdministrada(&jugador, NULL) == 0);
+
+    // Se agregan al final: el orden es A, B, C
+    verificar("el orden de la lista es A, B, C",
+              jugador.comunas->comuna == a && jugador.comunas->siguiente->comuna == b &&
+              jugador.comunas->siguiente->siguiente->comuna == c &&
+              jugador.comunas->siguiente->siguiente->siguiente == NULL);
+
+    // estaAdministrada compara punteros
+    verificar("A esta administrada", estaAdministrada(&jugador, a) == 1);
+    verificar("D no esta administrada", estaAdministrada(&jugador, d) == 0);
+
+    // Quitar la del medio (como si B se disolviera): la lista se reengancha
+    verificar("quitar B funciona", quitarAdministrada(&jugador, b) == 1);
+    verificar("despues de quitar B quedan A y C", contarAdministradas(&jugador) == 2 &&
+              jugador.comunas->comuna == a && jugador.comunas->siguiente->comuna == c);
+    verificar("B ya no esta administrada", estaAdministrada(&jugador, b) == 0);
+    verificar("quitar B otra vez devuelve 0 (ya no estaba)", quitarAdministrada(&jugador, b) == 0);
+    verificar("quitar no libera la comuna: B sigue existiendo", strcmp(b->nombre, "B") == 0);
+
+    // Reemplazo: con un espacio libre ya se puede agregar D
+    verificar("con un espacio libre se puede agregar D como reemplazo", agregarAdministrada(&jugador, d) == 1);
+    verificar("vuelve a tener 3 comunas", contarAdministradas(&jugador) == 3);
+
+    // Quitar la primera (cambia el inicio de la lista)
+    verificar("quitar A (la primera) funciona", quitarAdministrada(&jugador, a) == 1);
+    verificar("ahora la lista empieza en C", jugador.comunas->comuna == c);
+
+    // Liberar la lista: solo los nodos, las comunas siguen vivas
+    liberarJugador(&jugador);
+    verificar("liberarJugador deja la lista vacia", jugador.comunas == NULL && contarAdministradas(&jugador) == 0);
+    verificar("liberarJugador no libera las comunas: C sigue existiendo", strcmp(c->nombre, "C") == 0);
+
+    liberarComuna(a);
+    liberarComuna(b);
+    liberarComuna(c);
+    liberarComuna(d);
+}
+
 // Funcion principal de las pruebas: corre todas y devuelve 1 si alguna fallo
 int main(void) {
     probarPersonas();
@@ -421,6 +485,7 @@ int main(void) {
     probarAvl();
     probarSplay();
     probarTablaHash();
+    probarJugador();
  
     printf("\n");
     if (fallos == 0) {
