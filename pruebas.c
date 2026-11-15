@@ -9,6 +9,7 @@
 #include "Splay.h"
 #include "TablaPersonas.h"
 #include "Jugador.h"
+#include "Cola.h"
 
 // Cuenta cuantas verificaciones fallaron
 static int fallos = 0;
@@ -476,6 +477,82 @@ static void probarJugador(void) {
     liberarComuna(d);
 }
 
+// ---------- Cola de pedidos ----------
+
+// Funcion para escribir en texto el orden de la cola, por ejemplo "A:Agua B:Pan"
+static void ordenCola(const struct Cola *cola, char *destino, int tamano) {
+    destino[0] = '\0';
+
+    for (struct Pedido *p = cola->frente; p != NULL; p = p->siguiente) {
+        char parte[160];
+        snprintf(parte, sizeof(parte), "%s%s:%s", destino[0] != '\0' ? " " : "", p->comuna->nombre, p->bien);
+        strncat(destino, parte, tamano - strlen(destino) - 1);
+    }
+}
+
+// Funcion para probar la cola FIFO de pedidos de la red de ayuda mutua
+static void probarCola(void) {
+    printf("\n== Cola FIFO: pedidos de ayuda mutua ==\n");
+
+    struct Comuna *a = crearComuna("A", 10);
+    struct Comuna *b = crearComuna("B", 10);
+    char orden[200];
+
+    struct Cola cola;
+    iniciarCola(&cola);
+    verificar("la cola nueva esta vacia", colaVacia(&cola) && cola.frente == NULL && cola.final == NULL);
+    verificar("desencolar una cola vacia devuelve NULL", desencolarPedido(&cola) == NULL);
+
+    // Encolar: cada pedido va al final
+    encolarPedido(&cola, a, "Agua");
+    encolarPedido(&cola, b, "Pan");
+    encolarPedido(&cola, a, "Semillas");
+    ordenCola(&cola, orden, sizeof(orden));
+    verificar("encolar 3 pedidos los deja en orden de llegada", strcmp(orden, "A:Agua B:Pan A:Semillas") == 0);
+    verificar("el frente es el primero y el final el ultimo",
+              cola.frente->comuna == a && strcmp(cola.final->bien, "Semillas") == 0 && cola.cantidad == 3);
+    verificar("la misma comuna no puede pedir dos veces el mismo bien", encolarPedido(&cola, a, "Agua") == 0);
+    verificar("existePedido encuentra B:Pan", existePedido(&cola, b, "Pan") == 1);
+
+    // Desencolar: sale el primero que entro (FIFO)
+    struct Pedido *primero = desencolarPedido(&cola);
+    verificar("desencolar saca el primero que llego (A:Agua)", primero->comuna == a && strcmp(primero->bien, "Agua") == 0);
+    verificar("despues quedan 2 y el frente es B:Pan", cola.cantidad == 2 && cola.frente->comuna == b);
+
+    // Reencolar: un pedido no atendido vuelve al final
+    primero->diasEsperando++;
+    reencolarPedido(&cola, primero);
+    ordenCola(&cola, orden, sizeof(orden));
+    verificar("reencolar pone el pedido al final", strcmp(orden, "B:Pan A:Semillas A:Agua") == 0);
+    verificar("el pedido reencolado conserva sus dias de espera", cola.final->diasEsperando == 1);
+
+    // Cancelar uno del medio: los demas conservan su orden
+    verificar("cancelar A:Semillas funciona", cancelarPedido(&cola, a, "Semillas") == 1);
+    ordenCola(&cola, orden, sizeof(orden));
+    verificar("los demas conservan su orden", strcmp(orden, "B:Pan A:Agua") == 0);
+    verificar("cancelar algo que no esta devuelve 0", cancelarPedido(&cola, a, "Semillas") == 0);
+
+    // Quitar todos los pedidos de una comuna (como al disolverse)
+    encolarPedido(&cola, a, "Pan");
+    verificar("quitar los pedidos de A quita 2", quitarPedidosComuna(&cola, a) == 2);
+    ordenCola(&cola, orden, sizeof(orden));
+    verificar("solo queda B:Pan y el final apunta a el",
+              strcmp(orden, "B:Pan") == 0 && cola.final == cola.frente && cola.cantidad == 1);
+
+    // Al vaciarse, frente y final quedan en NULL
+    free(desencolarPedido(&cola));
+    verificar("al sacar el ultimo, frente y final quedan en NULL", cola.frente == NULL && cola.final == NULL);
+
+    // Liberar con pedidos adentro
+    encolarPedido(&cola, a, "Agua");
+    encolarPedido(&cola, b, "Agua");
+    liberarCola(&cola);
+    verificar("liberarCola deja la cola vacia", colaVacia(&cola) && cola.cantidad == 0);
+
+    liberarComuna(a);
+    liberarComuna(b);
+}
+
 // Funcion principal de las pruebas: corre todas y devuelve 1 si alguna fallo
 int main(void) {
     probarPersonas();
@@ -486,6 +563,7 @@ int main(void) {
     probarSplay();
     probarTablaHash();
     probarJugador();
+    probarCola();
  
     printf("\n");
     if (fallos == 0) {
