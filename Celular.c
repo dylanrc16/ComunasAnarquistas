@@ -621,10 +621,11 @@ static void appBiblioteca(struct Comuna *comuna, struct Comuna *sociedad, struct
 
 // ---------- App Red de ayuda mutua ----------
 
-// Pedidos que se muestran en la pantalla de la cola
-#define PEDIDOS_EN_PANTALLA 10
+// Pedidos que se muestran en la pantalla de la cola (cada uno ocupa 2 lineas)
+#define PEDIDOS_EN_PANTALLA 6
 
 // Funcion para ver la cola de pedidos de toda la sociedad, del frente al final.
+// Cada pedido ocupa dos lineas: la comuna que pide y que bien, con los dias que lleva.
 // Los pedidos de esta comuna se marcan con *.
 static void verColaCelular(struct Comuna *comuna, const struct Cola *pedidos) {
     if (!gastarBateria(comuna, GASTO_PAGINA)) {
@@ -638,14 +639,29 @@ static void verColaCelular(struct Comuna *comuna, const struct Cola *pedidos) {
 
     if (colaVacia(pedidos)) {
         lineaCelular("No hay pedidos.");
+    } else {
+        lineaCelular("El 1 recibe primero");
+        lineaCelular("");
     }
 
     // Recorre del frente (el siguiente en atenderse) hacia el final
     int numero = 0;
     for (struct Pedido *p = pedidos->frente; p != NULL && numero < PEDIDOS_EN_PANTALLA; p = p->siguiente) {
         numero++;
-        snprintf(linea, sizeof(linea), "%2d%c%-11.11s %-10.10s%3dd", numero,
-                 p->comuna == comuna ? '*' : ' ', p->comuna->nombre, p->bien, p->diasEsperando);
+        snprintf(linea, sizeof(linea), "%d. %.24s%s", numero, p->comuna->nombre, p->comuna == comuna ? " *" : "");
+        lineaCelular(linea);
+
+        // Dias que lleva esperando, en palabras: hoy, 1 dia, N dias
+        char espera[20];
+        if (p->diasEsperando == 0) {
+            snprintf(espera, sizeof(espera), "hoy");
+        } else if (p->diasEsperando == 1) {
+            snprintf(espera, sizeof(espera), "1 dia");
+        } else {
+            snprintf(espera, sizeof(espera), "%d dias", p->diasEsperando);
+        }
+
+        snprintf(linea, sizeof(linea), "   %.20s - %s", p->bien, espera);
         lineaCelular(linea);
     }
 
@@ -655,7 +671,8 @@ static void verColaCelular(struct Comuna *comuna, const struct Cola *pedidos) {
     }
 
     lineaCelular("");
-    lineaCelular("* = de esta comuna  d = dias");
+    lineaCelular("* = pedido de esta comuna");
+    lineaCelular("dias = tiempo esperando");
     bordeCelular();
 }
 
