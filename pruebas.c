@@ -7,6 +7,7 @@
 #include "Sociedad.h"
 #include "Avl.h"
 #include "Splay.h"
+#include "TablaPersonas.h"
 
 // Cuenta cuantas verificaciones fallaron
 static int fallos = 0;
@@ -316,6 +317,101 @@ static void probarSplay(void) {
     liberarSplay(raiz);
 }
 
+// ---------- Tabla hash de personas ----------
+
+// Funcion para probar la tabla hash: funcion djb2, insertar, buscar,
+// nombres repetidos, colisiones (encadenamiento) y carga del archivo
+static void probarTablaHash(void) {
+    printf("\n== Tabla hash: TablaPersonas ==\n");
+
+    struct TablaPersonas tabla;
+    iniciarTablaPersonas(&tabla);
+
+    // Tabla recien iniciada: todas las casillas vacias
+    int vacias = 1;
+    for (int i = 0; i < TAMANO_TABLA; i++) {
+        if (tabla.casillas[i] != NULL) {
+            vacias = 0;
+        }
+    }
+    verificar("la tabla nueva tiene todas las casillas en NULL y 0 personas", vacias && tabla.cantidad == 0);
+
+    // La funcion hash siempre da lo mismo para el mismo nombre y cae dentro de la tabla
+    int casilla = calcularCasilla("Diego Mora");
+    verificar("calcularCasilla da el mismo numero para el mismo nombre", casilla == calcularCasilla("Diego Mora"));
+    verificar("calcularCasilla queda entre 0 y TAMANO_TABLA - 1", casilla >= 0 && casilla < TAMANO_TABLA);
+
+    // Insertar y buscar
+    struct Persona *diego = insertarPersonaTabla(&tabla, "Diego Mora");
+    verificar("insertar devuelve la persona creada", diego != NULL && strcmp(diego->nombre, "Diego Mora") == 0);
+    verificar("la persona queda al inicio de la lista de su casilla", tabla.casillas[casilla] == diego);
+    verificar("buscar Diego Mora encuentra el mismo nodo", buscarPersonaTabla(&tabla, "Diego Mora") == diego);
+    verificar("buscar un nombre que no esta devuelve NULL", buscarPersonaTabla(&tabla, "Nadie Nunca") == NULL);
+    verificar("insertar un nombre vacio devuelve NULL", insertarPersonaTabla(&tabla, "") == NULL);
+
+    // Nombres repetidos: el segundo y el tercero se renombran para que sean unicos
+    struct Persona *ana1 = insertarPersonaTabla(&tabla, "Ana Rojas");
+    struct Persona *ana2 = insertarPersonaTabla(&tabla, "Ana Rojas");
+    struct Persona *ana3 = insertarPersonaTabla(&tabla, "Ana Rojas");
+    verificar("el primer nombre repetido se queda igual", strcmp(ana1->nombre, "Ana Rojas") == 0);
+    verificar("el segundo se renombra como \"Ana Rojas 2\"", strcmp(ana2->nombre, "Ana Rojas 2") == 0);
+    verificar("el tercero se renombra como \"Ana Rojas 3\"", strcmp(ana3->nombre, "Ana Rojas 3") == 0);
+    verificar("buscar \"Ana Rojas 2\" encuentra a la segunda", buscarPersonaTabla(&tabla, "Ana Rojas 2") == ana2);
+    verificar("la tabla cuenta 4 personas", tabla.cantidad == 4);
+
+    // Colisiones: con mas nombres que casillas, al menos dos caen en la misma casilla
+    // (principio del palomar). Se insertan 600 nombres y se busca una casilla con 2 o mas.
+    char nombre[50];
+    for (int i = 0; i < 600; i++) {
+        snprintf(nombre, sizeof(nombre), "Persona %d", i);
+        insertarPersonaTabla(&tabla, nombre);
+    }
+
+    struct Persona *primera = NULL;
+    for (int i = 0; i < TAMANO_TABLA && primera == NULL; i++) {
+        if (tabla.casillas[i] != NULL && tabla.casillas[i]->siguiente != NULL) {
+            primera = tabla.casillas[i];
+        }
+    }
+
+    verificar("con 604 personas hay una casilla con 2 o mas (colision)", primera != NULL);
+
+    if (primera != NULL) {
+        struct Persona *segunda = primera->siguiente;
+        printf("          (\"%s\" y \"%s\" chocan en la casilla %d)\n",
+               primera->nombre, segunda->nombre, calcularCasilla(primera->nombre));
+        verificar("las dos personas que chocan dan la misma casilla",
+                  calcularCasilla(primera->nombre) == calcularCasilla(segunda->nombre));
+        verificar("buscar cada una encuentra su propio nodo (encadenamiento)",
+                  buscarPersonaTabla(&tabla, primera->nombre) == primera &&
+                  buscarPersonaTabla(&tabla, segunda->nombre) == segunda);
+    }
+
+    // Todas las personas se pueden encontrar
+    int encontradas = 0;
+    for (int i = 0; i < 600; i++) {
+        snprintf(nombre, sizeof(nombre), "Persona %d", i);
+        if (buscarPersonaTabla(&tabla, nombre) != NULL) {
+            encontradas++;
+        }
+    }
+    verificar("las 600 personas insertadas se encuentran", encontradas == 600);
+    verificar("la tabla cuenta 604 personas", tabla.cantidad == 604);
+
+    liberarTablaPersonas(&tabla);
+
+    // Carga desde el archivo personas
+    iniciarTablaPersonas(&tabla);
+    int cargadas = cargarTablaPersonas(&tabla, "personas");
+    verificar("cargarTablaPersonas lee las 500 personas del archivo", cargadas == 500);
+    liberarTablaPersonas(&tabla);
+
+    iniciarTablaPersonas(&tabla);
+    verificar("cargarTablaPersonas devuelve 0 si el archivo no existe",
+              cargarTablaPersonas(&tabla, "no_existe.txt") == 0);
+    liberarTablaPersonas(&tabla);
+}
+
 // Funcion principal de las pruebas: corre todas y devuelve 1 si alguna fallo
 int main(void) {
     probarPersonas();
@@ -324,6 +420,7 @@ int main(void) {
     probarSociedad();
     probarAvl();
     probarSplay();
+    probarTablaHash();
  
     printf("\n");
     if (fallos == 0) {
