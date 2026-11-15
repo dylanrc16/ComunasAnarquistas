@@ -27,6 +27,8 @@ Duvan Asenjo
 12. [Emergencias](#emergencias)
 13. [La economía: regalo y ayuda mutua](#la-economía-regalo-y-ayuda-mutua)
 14. [Parámetros de diseño](#parámetros-de-diseño)
+15. [Funcionalidad propia: el celular solar](#funcionalidad-propia-el-celular-solar)
+16. [Limitaciones conocidas](#limitaciones-conocidas)
 
 ---
 
@@ -414,10 +416,58 @@ Todos son decisiones nuestras y están pensados para ajustarse fácilmente.
 | Libros para aprender un servicio | 3 | `Persona.h` |
 | Casillas de la tabla hash | 509 | `TablaPersonas.h` |
 
+## Funcionalidad propia: el celular solar
+
+Cada comuna tiene un **celular comunitario** que funciona con energía solar. Se abre con la opción 12, solo en las comunas de la persona usuaria. Todo está en `Celular.c`.
+
+```
+   +--------------------------------+
+   | Aurora Verde  [######### ] 98% |
+   | ------------------------------ |
+   |                                |
+   |   1. Biblioteca                |
+   |   2. Red de ayuda mutua        |
+   |   3. Notificaciones            |
+   |   4. ???                       |
+   |   5. ???                       |
+   |                                |
+   |   0. Apagar                    |
+   +--------------------------------+
+```
+
+### La batería
+
+- Empieza en 100%. Encenderlo cuesta 2%.
+- **Se carga con el sol según los paneles solares de la comuna.** Cada día suma `30 × existencia de paneles / máximo de paneles`, así que una comuna con los paneles llenos carga 30% y una con los paneles dañados carga menos. Si la comuna no tiene el bien "Paneles solares", carga 10% por día.
+- Así el celular se conecta con la simulación: cuidar los paneles (o recibirlos de regalo) es lo que permite usarlo.
+
+### App Biblioteca
+
+| Opción | Qué hace | Estructura | Batería |
+|---|---|---|---|
+| Ver los libros | Lista el catálogo de 8 en 8, en orden alfabético | Recorrido en orden del AVL, que solo baja hasta la página que se muestra | 1% por página |
+| Buscar por nombre | Dice si un libro está en la biblioteca | Búsqueda en el AVL | 1% |
+| Buscar un texto | Dice en qué libros aparece un texto | Caché splay de la comuna | **1% si es acierto, 5% si es fallo** |
+| Leer un libro | Muestra el archivo real, página por página (15 líneas) | El AVL confirma que el libro existe | 1% por página |
+
+- El costo de buscar un texto muestra la diferencia de la caché: un fallo tiene que abrir y leer todos los archivos, mientras que un acierto solo sube un nodo a la raíz.
+- Al leer, se elige **quién lee** de la lista numerada de personas de la comuna. Si esa persona está estudiando un servicio, el libro cuenta para sus 3 libros cuando lee 3 páginas o llega al final. Si con ese libro llega a 3, aprende el servicio.
+- Las líneas largas se cortan en el último espacio, y las letras con tilde se cuentan como un carácter para que no se descuadre el borde.
+- Si la batería se acaba, el celular se apaga, aunque sea a media lectura.
+
+### Las opciones secretas
+
+- **4:** abre algo que no se debía abrir. Muestra el enlace a un meme (`memes/meme.png`).
+- **5:** **autodestrucción.** Muestra una explosión en tres cuadros (la chispa sobre la ciudad, el hongo y el polvo de la memoria liberada) y la sociedad entera se disuelve. No usa `exit()`: el programa sale del ciclo de días y pasa por el código normal de liberación, así que se libera toda la memoria (la lista del jugador, las comunas con sus cachés, el AVL, la tabla hash y los catálogos). Lo comprobamos con AddressSanitizer: no queda ninguna fuga.
+
+Las opciones 2 y 3 (red de ayuda mutua y notificaciones) quedaron planeadas pero no se implementaron; muestran "Esta app todavia se esta instalando...".
+
 ## Limitaciones conocidas
 
-- La lista de personas se carga desde el archivo, pero las comunas solo usan **cuántas** personas tienen, no sus nombres.
-- Solo se usan dos estructuras de datos (lista simple y lista doble). No se implementó tabla de dispersión.
-- El aleatorio usa `rand()` con semilla por hora, así que cada partida es distinta.
-- La producción no se pidió en la especificación. La agregamos para que la sociedad no se quede sin bienes de forma inevitable, ya que sin ella solo hay procesos que consumen.
-- Los parámetros de la tabla anterior son decisiones de diseño y no están calibrados con datos reales.
+- **Solo se leen los `.txt` de la carpeta del corpus**, no los de sus subcarpetas.
+- **La caché no tiene tamaño máximo.** Cada texto buscado se queda en el splay de su comuna hasta que la comuna se disuelve o termina el programa. Los textos que no se vuelven a buscar quedan lejos de la raíz, así que no estorban las búsquedas, pero sí ocupan memoria.
+- **Un texto que cruza dos líneas del libro no se encuentra**, porque la búsqueda revisa línea por línea.
+- **Las tildes en la terminal:** los libros con tildes se ven bien en Linux. En PowerShell de Windows puede hacer falta correr `chcp 65001` antes.
+- **El aleatorio** usa `rand()` con semilla por hora, así que cada partida es distinta y los servicios de cada persona cambian entre partidas.
+- **Los parámetros** de la tabla anterior son decisiones de diseño y no están calibrados con datos reales.
+- La producción de bienes no se pidió en la especificación. La agregamos en el Proyecto 1 para que la sociedad no se quede sin bienes de forma inevitable.
