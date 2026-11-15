@@ -5,6 +5,7 @@
 #include "Comunas.h"
 #include "TablaPersonas.h"
 #include "Biblioteca.h"
+#include "Cola.h"
 
 // Bateria llena
 #define BATERIA_MAXIMA 100
@@ -39,9 +40,9 @@ void iniciarCelulares(struct Comuna *sociedad);
 void cargarCelulares(struct Comuna *sociedad);
 // Funcion para abrir el celular comunitario de una comuna.
 // Necesita la sociedad y la tabla (para que leer cuente para aprender)
-// y el catalogo (para la app Biblioteca).
+// y el catalogo (para la app Biblioteca) y la cola de pedidos (para la red de ayuda mutua).
 // Devuelve 1 si se eligio la autodestruccion (opcion 5) y 0 si se apago normal.
-int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo);
+int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo, struct Cola *pedidos);
 
 // Fin de la proteccion contra inclusion doble
 #endif

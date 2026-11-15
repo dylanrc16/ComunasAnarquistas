@@ -6,6 +6,7 @@
 #include "Celular.h"
 #include "Sociedad.h"
 #include "Indices.h"
+#include "Economia.h"
 
 // Ancho de la pantalla del celular (sin los bordes)
 #define ANCHO_PANTALLA 30
@@ -618,10 +619,169 @@ static void appBiblioteca(struct Comuna *comuna, struct Comuna *sociedad, struct
     }
 }
 
+// ---------- App Red de ayuda mutua ----------
+
+// Pedidos que se muestran en la pantalla de la cola
+#define PEDIDOS_EN_PANTALLA 10
+
+// Funcion para ver la cola de pedidos de toda la sociedad, del frente al final.
+// Los pedidos de esta comuna se marcan con *.
+static void verColaCelular(struct Comuna *comuna, const struct Cola *pedidos) {
+    if (!gastarBateria(comuna, GASTO_PAGINA)) {
+        printf("Se acabo la bateria.\n");
+        return;
+    }
+
+    char linea[64];
+    snprintf(linea, sizeof(linea), "COLA DE PEDIDOS (%d)", pedidos->cantidad);
+    inicioPantalla(comuna, linea);
+
+    if (colaVacia(pedidos)) {
+        lineaCelular("No hay pedidos.");
+    }
+
+    // Recorre del frente (el siguiente en atenderse) hacia el final
+    int numero = 0;
+    for (struct Pedido *p = pedidos->frente; p != NULL && numero < PEDIDOS_EN_PANTALLA; p = p->siguiente) {
+        numero++;
+        snprintf(linea, sizeof(linea), "%2d%c%-11.11s %-10.10s%3dd", numero,
+                 p->comuna == comuna ? '*' : ' ', p->comuna->nombre, p->bien, p->diasEsperando);
+        lineaCelular(linea);
+    }
+
+    if (pedidos->cantidad > numero) {
+        snprintf(linea, sizeof(linea), "   ... y %d mas", pedidos->cantidad - numero);
+        lineaCelular(linea);
+    }
+
+    lineaCelular("");
+    lineaCelular("* = de esta comuna  d = dias");
+    bordeCelular();
+}
+
+// Funcion para pedir un bien: elige uno de los bienes de la comuna por numero
+static void pedirBienCelular(struct Comuna *comuna, struct Cola *pedidos) {
+    if (!gastarBateria(comuna, GASTO_PAGINA)) {
+        printf("Se acabo la bateria.\n");
+        return;
+    }
+
+    // Lista los bienes con cuanto tiene de cada uno
+    printf("\nBienes de %s:\n", comuna->nombre);
+    printf("   0. Volver\n");
+
+    int cantidad = 0;
+    for (struct Recurso *bien = comuna->bienes; bien != NULL; bien = bien->siguiente) {
+        cantidad++;
+        int porcentaje = bien->maximo > 0 ? 100 * bien->existencia / bien->maximo : 0;
+        printf("%4d. %-24s %3d%%%s\n", cantidad, bien->nombre, porcentaje,
+               existePedido(pedidos, comuna, bien->nombre) ? "  (ya pedido)" : "");
+    }
+
+    int opcion = leerNumeroCelular("Que bien necesita?", 0, cantidad);
+
+    if (opcion == 0) {
+        return;
+    }
+
+    struct Recurso *bien = comuna->bienes;
+    for (int i = 1; i < opcion; i++) {
+        bien = bien->siguiente;
+    }
+
+    // Solo se pide lo que hace falta: si tiene de sobra, no es un pedido de ayuda
+    if (bien->maximo > 0 && 100 * bien->existencia >= AUTONOMA_EXCEDENTE * bien->maximo) {
+        printf("%s tiene suficiente %s (%d%% o mas): no hace falta pedirlo.\n",
+               comuna->nombre, bien->nombre, AUTONOMA_EXCEDENTE);
+        return;
+    }
+
+    if (encolarPedido(pedidos, comuna, bien->nombre)) {
+        printf("Pedido enviado: %s necesita %s. Esta en el lugar %d de la cola.\n",
+               comuna->nombre, bien->nombre, pedidos->cantidad);
+    } else {
+        printf("%s ya habia pedido %s.\n", comuna->nombre, bien->nombre);
+    }
+}
+
+// Funcion para cancelar uno de los pedidos de esta comuna, elegido por numero
+static void cancelarPedidoCelular(struct Comuna *comuna, struct Cola *pedidos) {
+    printf("\nPedidos de %s:\n", comuna->nombre);
+    printf("   0. Volver\n");
+
+    // Numera solo los pedidos de esta comuna, en el orden de la cola
+    int cantidad = 0;
+    for (struct Pedido *p = pedidos->frente; p != NULL; p = p->siguiente) {
+        if (p->comuna == comuna) {
+            cantidad++;
+            printf("%4d. %s (lleva %d dias esperando)\n", cantidad, p->bien, p->diasEsperando);
+        }
+    }
+
+    if (cantidad == 0) {
+        printf("No tiene pedidos en la cola.\n");
+        return;
+    }
+
+    int opcion = leerNumeroCelular("Cual cancelar?", 0, cantidad);
+
+    if (opcion == 0) {
+        return;
+    }
+
+    // Busca el pedido elegido; se copia el nombre porque cancelar libera el nodo
+    struct Pedido *p = pedidos->frente;
+    int contador = 0;
+
+    while (p != NULL) {
+        if (p->comuna == comuna && ++contador == opcion) {
+            break;
+        }
+        p = p->siguiente;
+    }
+
+    char bien[50];
+    snprintf(bien, sizeof(bien), "%s", p->bien);
+    cancelarPedido(pedidos, comuna, bien);
+    printf("Se cancelo el pedido de %s.\n", bien);
+}
+
+// Funcion para la app Red de ayuda mutua: su propio menu dentro del celular
+static void appAyudaMutua(struct Comuna *comuna, struct Cola *pedidos) {
+    while (1) {
+        char linea[64];
+        inicioPantalla(comuna, "RED DE AYUDA MUTUA");
+        snprintf(linea, sizeof(linea), "Pedidos en la cola: %d", pedidos->cantidad);
+        lineaCelular(linea);
+        lineaCelular("");
+        lineaCelular("  1. Ver la cola");
+        lineaCelular("  2. Pedir un bien");
+        lineaCelular("  3. Cancelar un pedido");
+        lineaCelular("");
+        lineaCelular("  0. Volver");
+        bordeCelular();
+
+        char letra = leerLetra("Opcion");
+
+        if (letra == '0' || letra == 'x') {
+            return;
+        }
+        if (letra == '1') {
+            verColaCelular(comuna, pedidos);
+        }
+        if (letra == '2') {
+            pedirBienCelular(comuna, pedidos);
+        }
+        if (letra == '3') {
+            cancelarPedidoCelular(comuna, pedidos);
+        }
+    }
+}
+
 // ---------- Celular ----------
 
 // Funcion para abrir el celular comunitario de una comuna
-int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo) {
+int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPersonas *tabla, const struct Catalogo *catalogo, struct Cola *pedidos) {
     if (!gastarBateria(comuna, GASTO_ENCENDER)) {
         printf("El celular de %s no tiene bateria (%d%%). Espere a que el sol lo cargue.\n",
                comuna->nombre, comuna->bateria);
@@ -650,7 +810,10 @@ int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPer
         if (opcion == 1) {
             appBiblioteca(comuna, sociedad, tabla, catalogo);
         }
-        if (opcion == 2 || opcion == 3) {
+        if (opcion == 2) {
+            appAyudaMutua(comuna, pedidos);
+        }
+        if (opcion == 3) {
             printf("Esta app todavia se esta instalando...\n");
         }
         if (opcion == 4) {

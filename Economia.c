@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "Economia.h"
 #include "Sociedad.h"
 
@@ -144,12 +145,7 @@ struct Persona *regalarServicio(struct TablaPersonas *tabla, struct Comuna *da, 
 
 // ---------- Ayuda mutua automatica ----------
 
-// Una comuna autonoma regala un bien cuando tiene mas de este porcentaje de su maximo
-#define AUTONOMA_EXCEDENTE 70
-// Solo le regala a una comuna que tenga menos de este porcentaje de ese bien
-#define AUTONOMA_NECESITA 40
-// Regala como maximo este porcentaje de su maximo por bien por dia
-#define AUTONOMA_REGALO 10
+// Los porcentajes AUTONOMA_EXCEDENTE, AUTONOMA_NECESITA y AUTONOMA_REGALO estan en Economia.h
 
 // Funcion para buscar la comuna que mas necesita un bien: la de menor porcentaje,
 // siempre que este bajo AUTONOMA_NECESITA. Devuelve NULL si nadie lo necesita.
@@ -275,4 +271,86 @@ int ayudaAutonoma(struct Comuna *sociedad, struct TablaPersonas *tabla, const st
     }
 
     return regalos;
+}
+
+// ---------- Red de ayuda mutua: cola de pedidos ----------
+
+// Funcion para calcular que porcentaje de su maximo tiene una comuna de un bien
+// (-1 si no tiene ese bien)
+static int porcentajeBien(const struct Comuna *comuna, const char *bien) {
+    struct Recurso *recurso = buscarRecurso(comuna->bienes, bien);
+
+    if (recurso == NULL || recurso->maximo == 0) {
+        return -1;
+    }
+
+    return 100 * recurso->existencia / recurso->maximo;
+}
+
+// Funcion para buscar la comuna autonoma con mas excedente de un bien
+// (sobre AUTONOMA_EXCEDENTE). Devuelve NULL si ninguna puede dar.
+static struct Comuna *autonomaConMasExcedente(struct Comuna *sociedad, const struct Comuna *pide, const char *bien, const struct Jugador *jugador) {
+    struct Comuna *elegida = NULL;
+    int mayor = AUTONOMA_EXCEDENTE - 1;
+
+    for (struct Comuna *comuna = sociedad; comuna != NULL; comuna = comuna->siguiente) {
+        // Solo atienden las comunas autonomas (las del jugador las maneja el jugador)
+        if (comuna == pide || estaAdministrada(jugador, comuna)) {
+            continue;
+        }
+
+        int porcentaje = porcentajeBien(comuna, bien);
+
+        if (porcentaje > mayor) {
+            mayor = porcentaje;
+            elegida = comuna;
+        }
+    }
+
+    return elegida;
+}
+
+// Funcion para atender la cola de pedidos. Se da UNA vuelta a la cola:
+// cada pedido se desencola una vez; si se atiende se libera, y si no, se reencola.
+// Como todos los que esperan se reencolan en el mismo orden, la cola conserva el orden de llegada.
+int atenderPedidos(struct Comuna *sociedad, struct Cola *cola, const struct Jugador *jugador) {
+    int vuelta = cola->cantidad;
+    int atendidos = 0;
+
+    for (int i = 0; i < vuelta; i++) {
+        struct Pedido *pedido = desencolarPedido(cola);
+
+        // Si la comuna ya no lo necesita (por produccion u otro regalo), el pedido se cierra
+        if (porcentajeBien(pedido->comuna, pedido->bien) >= AUTONOMA_EXCEDENTE) {
+            printf("Red de ayuda mutua: %s ya no necesita %s, su pedido se cerro\n",
+                   pedido->comuna->nombre, pedido->bien);
+            free(pedido);
+            continue;
+        }
+
+        struct Comuna *da = autonomaConMasExcedente(sociedad, pedido->comuna, pedido->bien, jugador);
+        int regalado = 0;
+
+        if (da != NULL) {
+            struct Recurso *recurso = buscarRecurso(da->bienes, pedido->bien);
+            regalado = regalarRecurso(da, pedido->comuna, 1, pedido->bien, recurso->maximo * AUTONOMA_REGALO / 100);
+        }
+
+        if (regalado > 0) {
+            printf("Red de ayuda mutua: %s atendio el pedido de %s y le dio %d de %s (espero %d dias)\n",
+                   da->nombre, pedido->comuna->nombre, regalado, pedido->bien, pedido->diasEsperando);
+            free(pedido);
+            atendidos++;
+        } else {
+            // Nadie pudo: espera un dia mas, al final de la cola
+            pedido->diasEsperando++;
+            reencolarPedido(cola, pedido);
+        }
+    }
+
+    if (!colaVacia(cola)) {
+        printf("Red de ayuda mutua: %d pedidos siguen esperando\n", cola->cantidad);
+    }
+
+    return atendidos;
 }

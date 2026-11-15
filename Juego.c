@@ -16,6 +16,7 @@
 #include "Biblioteca.h"
 #include "Jugador.h"
 #include "Celular.h"
+#include "Cola.h"
 
 // ---------- Utilidades ----------
 
@@ -556,7 +557,7 @@ static void elegirReemplazo(struct Comuna *sociedad, struct Jugador *jugador) {
 // Funcion para revisar que comunas estan en crisis y disolver las que llevan
 // 3 dias seguidos. Devuelve el nuevo inicio de la sociedad y deja *perdio en 1
 // si la partida se perdio.
-static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, int *perdio) {
+static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, struct Cola *pedidos, int *perdio) {
     struct Comuna *comuna = sociedad;
     int huboDisolucion = 0;
 
@@ -582,6 +583,8 @@ static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaP
                     printf("Era una de sus comunas. Vidas restantes: %d de %d\n", VIDAS - jugador->vidasPerdidas, VIDAS);
                 }
 
+                // Sus pedidos salen de la cola antes de liberarla (si no, apuntarian a memoria liberada)
+                quitarPedidosComuna(pedidos, comuna);
                 sociedad = disolverComuna(sociedad, comuna, tabla);
                 huboDisolucion = 1;
             }
@@ -625,7 +628,7 @@ static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaP
 
 // Funcion para simular un dia completo. Devuelve el nuevo inicio de la sociedad
 // (cambia si se disuelve la primera comuna).
-static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, int dia, int *perdio) {
+static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, struct Cola *pedidos, int dia, int *perdio) {
     printf("\n--- Dia %d ---\n", dia);
 
     consumirRecursos(sociedad);
@@ -636,13 +639,15 @@ static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *
     // Los servicios vuelven a ser lo que saben las personas
     // (una emergencia de ayer solo los interrumpio ese dia)
     recalcularServicios(sociedad, tabla);
-    // Las comunas autonomas se ayudan solas
+    // Primero se atienden los pedidos de la red de ayuda mutua, en orden de llegada;
+    // despues las comunas autonomas se ayudan solas con lo que les sobre
+    atenderPedidos(sociedad, pedidos, jugador);
     ayudaAutonoma(sociedad, tabla, jugador);
     avanzarEmergencias(sociedad);
     actualizarIndices(sociedad);
 
     // Al final del dia: crisis y disoluciones
-    return revisarDisoluciones(sociedad, tabla, jugador, perdio);
+    return revisarDisoluciones(sociedad, tabla, jugador, pedidos, perdio);
 }
 
 // ---------- Menu del dia ----------
@@ -653,7 +658,7 @@ static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *
 // Funcion para mostrar el menu del dia. Devuelve cuantos dias hay que avanzar
 // (1 con la opcion 4, de 1 a 30 con la opcion 11), 0 para salir
 // o AUTODESTRUCCION si en el celular se eligio la opcion 5
-static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *catalogo, struct TablaPersonas *tabla, const struct Jugador *jugador) {
+static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *catalogo, struct TablaPersonas *tabla, const struct Jugador *jugador, struct Cola *pedidos) {
     // Repite el menu hasta pasar de dia o salir
     while (1) {
         printf("\n1. Hacer un regalo entre comunas\n");
@@ -716,7 +721,7 @@ static int menuDia(struct Comuna *sociedad, int dia, const struct Catalogo *cata
 
             if (!estaAdministrada(jugador, comuna)) {
                 printf("Solo puede usar el celular de sus comunas (las marcadas con *)\n");
-            } else if (abrirCelular(comuna, sociedad, tabla, catalogo)) {
+            } else if (abrirCelular(comuna, sociedad, tabla, catalogo, pedidos)) {
                 return AUTODESTRUCCION;
             }
         }
@@ -819,6 +824,10 @@ void iniciarJuego(void) {
         iniciarJugador(&jugador);
         elegirComunasIniciales(sociedad, &jugador);
 
+        // La cola de pedidos de la red de ayuda mutua empieza vacia
+        struct Cola pedidos;
+        iniciarCola(&pedidos);
+
         // Bucle principal: el dia 1 solo muestra el estado inicial;
         // despues el menu dice cuantos dias avanzar (0 para salir)
         int dia = 1;
@@ -826,7 +835,7 @@ void iniciarJuego(void) {
         mostrarEstado(sociedad, dia, &jugador);
 
         while (!perdio) {
-            int diasAvanzar = menuDia(sociedad, dia, &catalogo, &tabla, &jugador);
+            int diasAvanzar = menuDia(sociedad, dia, &catalogo, &tabla, &jugador, &pedidos);
 
             if (diasAvanzar == 0) {
                 break;
@@ -839,7 +848,7 @@ void iniciarJuego(void) {
 
             for (int i = 0; i < diasAvanzar && !perdio; i++) {
                 dia++;
-                sociedad = simularDia(sociedad, &tabla, &jugador, dia, &perdio);
+                sociedad = simularDia(sociedad, &tabla, &jugador, &pedidos, dia, &perdio);
             }
 
             mostrarEstado(sociedad, dia, &jugador);
@@ -849,8 +858,9 @@ void iniciarJuego(void) {
             printf("La sociedad llego hasta el dia %d\n", dia);
         }
 
-        // Al salir, libera la lista del jugador (solo sus nodos) y la sociedad
+        // Al salir, libera la lista del jugador (solo sus nodos), la cola y la sociedad
         liberarJugador(&jugador);
+        liberarCola(&pedidos);
         liberarComunas(sociedad);
     }
 
