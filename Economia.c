@@ -102,6 +102,7 @@ int regalarRecurso(struct Comuna *da, struct Comuna *recibe, int esBien, const c
 
     // Anota el regalo: contadores, solidaridad y apoyo
     registrarRegalo(da, recibe);
+    notificar(recibe, "%s le regalo %d de %s", da->nombre, regalo, nombre);
 
     return regalo;
 }
@@ -139,6 +140,7 @@ struct Persona *regalarServicio(struct TablaPersonas *tabla, struct Comuna *da, 
 
     // Anota el regalo: contadores, solidaridad y apoyo
     registrarRegalo(da, recibe);
+    notificar(recibe, "%s llego desde %s y sabe %s", candidata->nombre, da->nombre, servicio);
 
     return candidata;
 }
@@ -324,6 +326,7 @@ int atenderPedidos(struct Comuna *sociedad, struct Cola *cola, const struct Juga
         if (porcentajeBien(pedido->comuna, pedido->bien) >= AUTONOMA_EXCEDENTE) {
             printf("Red de ayuda mutua: %s ya no necesita %s, su pedido se cerro\n",
                    pedido->comuna->nombre, pedido->bien);
+            notificar(pedido->comuna, "Su pedido de %s se cerro: ya no le hace falta", pedido->bien);
             free(pedido);
             continue;
         }
@@ -339,6 +342,7 @@ int atenderPedidos(struct Comuna *sociedad, struct Cola *cola, const struct Juga
         if (regalado > 0) {
             printf("Red de ayuda mutua: %s atendio el pedido de %s y le dio %d de %s (espero %d dias)\n",
                    da->nombre, pedido->comuna->nombre, regalado, pedido->bien, pedido->diasEsperando);
+            notificar(pedido->comuna, "Su pedido de %s fue atendido por la red de ayuda mutua", pedido->bien);
             free(pedido);
             atendidos++;
         } else {

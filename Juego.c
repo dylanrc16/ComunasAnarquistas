@@ -503,6 +503,7 @@ static void irABiblioteca(struct Comuna *sociedad, struct TablaPersonas *tabla, 
         }
 
         printf("\n%s aprendio %s! Ahora su comuna cuenta con ese servicio.\n", persona->nombre, servicio);
+        notificar(comuna, "%s aprendio %s en la biblioteca", persona->nombre, servicio);
 
         // Cambio lo que saben las personas de la comuna: se recalculan servicios e indices
         recalcularServicios(sociedad, tabla);
@@ -571,6 +572,8 @@ static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaP
             if (comuna->diasEnCrisis < DIAS_PARA_DISOLVER) {
                 printf("!!! %s esta en crisis (dia %d de %d) !!!\n",
                        comuna->nombre, comuna->diasEnCrisis, DIAS_PARA_DISOLVER);
+                notificar(comuna, "CRISIS: dia %d de %d. Al llegar a %d la comuna se disuelve",
+                          comuna->diasEnCrisis, DIAS_PARA_DISOLVER, DIAS_PARA_DISOLVER);
             } else {
                 int esDelJugador = estaAdministrada(jugador, comuna);
                 printf("*** %s se disolvio: sus %d personas se mudaron a las comunas cercanas ***\n",
@@ -590,6 +593,9 @@ static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaP
             }
         } else {
             // Salio de la crisis: la cuenta vuelve a empezar
+            if (comuna->diasEnCrisis > 0) {
+                notificar(comuna, "Salio de la crisis");
+            }
             comuna->diasEnCrisis = 0;
         }
 
@@ -630,6 +636,9 @@ static struct Comuna *revisarDisoluciones(struct Comuna *sociedad, struct TablaP
 // (cambia si se disuelve la primera comuna).
 static struct Comuna *simularDia(struct Comuna *sociedad, struct TablaPersonas *tabla, struct Jugador *jugador, struct Cola *pedidos, int dia, int *perdio) {
     printf("\n--- Dia %d ---\n", dia);
+
+    // Las notificaciones de hoy llevan este dia
+    fijarDiaNotificaciones(dia);
 
     consumirRecursos(sociedad);
     producirRecursos(sociedad);
@@ -832,6 +841,7 @@ void iniciarJuego(void) {
         // despues el menu dice cuantos dias avanzar (0 para salir)
         int dia = 1;
         int perdio = 0;
+        fijarDiaNotificaciones(dia);
         mostrarEstado(sociedad, dia, &jugador);
 
         while (!perdio) {

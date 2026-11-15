@@ -117,7 +117,14 @@ static void pantallaInicio(const struct Comuna *comuna) {
     lineaCelular("");
     lineaCelular("  1. Biblioteca");
     lineaCelular("  2. Red de ayuda mutua");
-    lineaCelular("  3. Notificaciones");
+    // Si hay notificaciones nuevas, se muestra cuantas
+    char notificaciones[64];
+    if (comuna->bandeja.noLeidas > 0) {
+        snprintf(notificaciones, sizeof(notificaciones), "  3. Notificaciones (%d)", comuna->bandeja.noLeidas);
+    } else {
+        snprintf(notificaciones, sizeof(notificaciones), "  3. Notificaciones");
+    }
+    lineaCelular(notificaciones);
     lineaCelular("  4. ???");
     lineaCelular("  5. ???");
     lineaCelular("");
@@ -556,6 +563,7 @@ static void leerLibroCelular(struct Comuna *comuna, struct Comuna *sociedad, str
 
                 if (leerLibro(lector, nombre)) {
                     printf("%s termino de leer y aprendio %s!\n", lector->nombre, servicio);
+                    notificar(comuna, "%s aprendio %s leyendo en el celular", lector->nombre, servicio);
                     recalcularServicios(sociedad, tabla);
                     actualizarIndices(sociedad);
                 } else if (servicio[0] != '\0') {
@@ -795,6 +803,97 @@ static void appAyudaMutua(struct Comuna *comuna, struct Cola *pedidos) {
     }
 }
 
+// ---------- App Notificaciones ----------
+
+// Notificaciones que se muestran por pagina
+#define NOTIFICACIONES_POR_PAGINA 4
+
+// Funcion para mostrar una pagina de notificaciones, de la mas reciente a la mas vieja.
+// Cada notificacion muestra su dia y su texto partido en lineas que caben en la pantalla.
+// Las primeras "nuevas" se marcan como nuevas. Devuelve 1 si hay mas paginas.
+static int mostrarPaginaNotificaciones(const struct Bandeja *bandeja, int pagina, int nuevas) {
+    int desde = pagina * NOTIFICACIONES_POR_PAGINA;
+    int hasta = desde + NOTIFICACIONES_POR_PAGINA;
+    int posicion = 0;  // posicion de la notificacion (0 = la mas reciente)
+
+    // Recorre la pila desde el tope: primero lo mas reciente
+    for (struct Notificacion *n = bandeja->tope; n != NULL; n = n->siguiente, posicion++) {
+        if (posicion < desde) {
+            continue;
+        }
+        if (posicion >= hasta) {
+            return 1;
+        }
+
+        char linea[64];
+        snprintf(linea, sizeof(linea), "Dia %d%s", n->dia, posicion < nuevas ? "  (nueva)" : "");
+        lineaCelular(linea);
+
+        // El texto se parte en lineas que caben en la pantalla
+        const char *resto = n->texto;
+
+        while (*resto != '\0') {
+            const char *siguiente;
+            int bytes = cortarLinea(resto, &siguiente);
+            char pedazo[LARGO_NOTIFICACION];
+            snprintf(pedazo, sizeof(pedazo), " %.*s", bytes, resto);
+            lineaCelular(pedazo);
+            resto = siguiente;
+        }
+    }
+
+    return 0;
+}
+
+// Funcion para la app Notificaciones: muestra la bandeja de la comuna por paginas
+// y, al abrirla, las nuevas pasan a leidas
+static void appNotificaciones(struct Comuna *comuna) {
+    int nuevas = comuna->bandeja.noLeidas;
+    comuna->bandeja.noLeidas = 0;
+    int pagina = 0;
+
+    while (1) {
+        if (!gastarBateria(comuna, GASTO_PAGINA)) {
+            printf("Se acabo la bateria.\n");
+            return;
+        }
+
+        char titulo[64];
+        snprintf(titulo, sizeof(titulo), "NOTIFICACIONES  pag. %d", pagina + 1);
+        inicioPantalla(comuna, titulo);
+
+        int hayMas = 0;
+
+        if (comuna->bandeja.tope == NULL) {
+            lineaCelular("No hay notificaciones.");
+        } else {
+            hayMas = mostrarPaginaNotificaciones(&comuna->bandeja, pagina, nuevas);
+        }
+
+        lineaCelular("");
+        lineaCelular(hayMas ? "[S] Sig  [A] Ant  [X] Volver" : "(fin)    [A] Ant  [X] Volver");
+        bordeCelular();
+
+        // Pide la opcion hasta que sea valida (asi no se gasta bateria redibujando)
+        while (1) {
+            char letra = leerLetra("Opcion");
+
+            if (letra == 'x') {
+                return;
+            }
+            if (letra == 's' && hayMas) {
+                pagina++;
+                break;
+            }
+            if (letra == 'a' && pagina > 0) {
+                pagina--;
+                break;
+            }
+            avisoOpcion(letra);
+        }
+    }
+}
+
 // ---------- Celular ----------
 
 // Funcion para abrir el celular comunitario de una comuna
@@ -831,7 +930,7 @@ int abrirCelular(struct Comuna *comuna, struct Comuna *sociedad, struct TablaPer
             appAyudaMutua(comuna, pedidos);
         }
         if (opcion == 3) {
-            printf("Esta app todavia se esta instalando...\n");
+            appNotificaciones(comuna);
         }
         if (opcion == 4) {
             mostrarMeme();

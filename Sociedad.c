@@ -222,6 +222,11 @@ struct Comuna *disolverComuna(struct Comuna *sociedad, struct Comuna *comuna, st
         vecina = vecina->siguiente;
     }
 
+    // Avisa a cada cercana que va a recibir gente
+    for (int i = 0; i < cantidadCercanas; i++) {
+        notificar(cercanas[i], "%s se disolvio y parte de su gente llego aqui", comuna->nombre);
+    }
+
     // 2. Las personas se mudan en ronda a las cercanas, con todos sus servicios.
     //    Si no hay cercanas (era la unica comuna), quedan sin comuna.
     int turno = 0;

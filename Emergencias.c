@@ -53,6 +53,7 @@ static void penalizarVecinas(struct Comuna *comuna) {
 
     for (int i = 0; i < 2 && vecina != NULL; i++) {
         vecina->penalizacion += PENALIZACION_VECINAS;
+        notificar(vecina, "Emergencia en %s, comuna vecina: baja la satisfaccion", comuna->nombre);
         vecina = vecina->anterior;
     }
 
@@ -61,6 +62,7 @@ static void penalizarVecinas(struct Comuna *comuna) {
 
     for (int i = 0; i < 2 && vecina != NULL; i++) {
         vecina->penalizacion += PENALIZACION_VECINAS;
+        notificar(vecina, "Emergencia en %s, comuna vecina: baja la satisfaccion", comuna->nombre);
         vecina = vecina->siguiente;
     }
 }
@@ -87,6 +89,7 @@ static void provocarEmergencia(struct Comuna *sociedad) {
     // Dana sus bienes y servicios y castiga a sus vecinas
     golpearLista(comuna->bienes);
     golpearLista(comuna->servicios);
+    notificar(comuna, "EMERGENCIA: se perdio parte de los bienes y servicios");
     penalizarVecinas(comuna);
 }
 
