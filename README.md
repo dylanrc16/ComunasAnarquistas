@@ -2,7 +2,7 @@
 
 Proyecto 2 de Estructuras de Datos. Extiende el Proyecto 1, *Una sociedad solarpunk de comunas anarquistas*: una simulación por turnos (cada turno es un día) de una sociedad de 500 personas organizada en comunas que se ayudan entre sí **sin dinero y sin mercado**. El éxito de la sociedad se mide con la **satisfacción** de sus habitantes.
 
-En este proyecto las personas saben **servicios**, las comunas pueden **disolverse**, la persona usuaria administra **3 comunas** y cada comuna tiene una **biblioteca** donde su gente aprende servicios leyendo libros. La biblioteca usa un **AVL** para buscar libros por nombre y un **árbol splay** como caché de búsquedas de texto. Las personas se guardan en una **tabla hash**.
+En este proyecto las personas saben **servicios**, las comunas pueden **disolverse**, la persona usuaria administra **3 comunas** y cada comuna tiene una **biblioteca** donde su gente aprende servicios leyendo libros. La biblioteca usa un **AVL** para buscar libros por nombre y un **árbol splay** como caché de búsquedas de texto. Las personas se guardan en una **tabla hash** y los pedidos de ayuda entre comunas forman una **cola**.
 
 **Integrantes:**
 
@@ -45,7 +45,7 @@ Todo se compila desde la carpeta del proyecto, donde están también los archivo
 En Linux:
 
 ```
-gcc -Wall -Wextra -o proyecto Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c Avl.c Splay.c Biblioteca.c TablaPersonas.c Jugador.c Celular.c
+gcc -Wall -Wextra -o proyecto Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c Avl.c Splay.c Biblioteca.c TablaPersonas.c Jugador.c Celular.c Cola.c
 ./proyecto
 ```
 
@@ -119,6 +119,7 @@ Donde hay que elegir una comuna, un recurso o una persona, se elige **por númer
 | `Splay.c/.h` | Árbol splay de búsquedas de texto (la caché), con zig, zig-zig y zig-zag. |
 | `Biblioteca.c/.h` | Catálogo de libros (AVL), búsqueda de texto en los archivos y uso de la caché. |
 | `Jugador.c/.h` | Lista simple de las comunas que administra la persona usuaria y sus vidas. |
+| `Cola.c/.h` | Cola FIFO de pedidos de la red de ayuda mutua. |
 
 **Simulación**
 
@@ -128,7 +129,7 @@ Donde hay que elegir una comuna, un recurso o una persona, se elige **por númer
 | `Consumo.c/.h` | Cada día baja la existencia de los bienes. |
 | `Produccion.c/.h` | Cada día sube la existencia de los bienes. |
 | `Emergencias.c/.h` | Emergencias aleatorias que reducen recursos y afectan a las comunas cercanas. |
-| `Economia.c/.h` | Regalos de bienes y servicios, y la ayuda mutua autónoma entre comunas. |
+| `Economia.c/.h` | Regalos de bienes y servicios, la ayuda mutua autónoma y la atención de la cola de pedidos. |
 | `Indices.c/.h` | Índices de necesidad, satisfacción y reciprocidad. |
 
 **Programa**
@@ -145,7 +146,7 @@ Donde hay que elegir una comuna, un recurso o una persona, se elige **por númer
 `pruebas.c` es un programa aparte, con su propio `main`, que verifica cada estructura de datos. Cada prueba imprime `[OK]` o `[FALLO]`, y al final dice si todas pasaron.
 
 ```
-gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Sociedad.c Avl.c Splay.c TablaPersonas.c Jugador.c
+gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Sociedad.c Avl.c Splay.c TablaPersonas.c Jugador.c Cola.c
 ./pruebas_bin
 ```
 
@@ -158,6 +159,7 @@ gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Socieda
 | Splay | El ejemplo hecho en papel: buscar `A` deja el árbol `A(.,F(B(.,D(C,E)),G))`. También aciertos y fallos de la caché. |
 | Tabla hash | Función hash, insertar, buscar, nombres repetidos (`Ana Rojas 2`) y colisiones resueltas por encadenamiento. |
 | Jugador | Máximo 3 comunas, sin repetir, quitar una (sin liberar la comuna) y agregar un reemplazo. |
+| Cola | Orden de llegada (FIFO), reencolar al final, cancelar uno del medio sin desordenar el resto, quitar los de una comuna y que frente y final queden en NULL al vaciarse. |
 
 
 ## Estructuras de datos
@@ -169,6 +171,7 @@ gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Socieda
 | **Tabla hash** | Las 500 personas | Encontrar a una persona por nombre sin recorrer a las 500. |
 | **AVL** | Catálogo de libros (nombres de archivo) | Buscar un libro por nombre en O(log n), aunque haya miles. |
 | **Árbol splay** | Caché de búsquedas de texto de cada comuna | Las búsquedas que se repiten quedan cerca de la raíz y no hay que volver a leer los libros. |
+| **Cola (FIFO)** | Pedidos de la red de ayuda mutua | El primer pedido que llega es el primero que se atiende. |
 
 ### Lista doble de comunas y disolución
 
@@ -252,6 +255,12 @@ Zig: el padre de A es la raiz F. Una rotacion:
 
 El resultado es `A(.,F(B(.,D(C,E)),G))`. Las opciones 6 y 10 imprimen cada zig, zig-zig o zig-zag que se hace.
 
+### Cola de pedidos (`Cola.c`)
+
+Es una lista simple con **dos punteros**: `frente`, por donde se atiende, y `final`, por donde se encola. Con solo `frente`, encolar obligaría a recorrer toda la cola hasta el último (O(n)); con `final`, **encolar y desencolar cuestan O(1)**. Cuando la cola se vacía, los dos vuelven a NULL.
+
+Para quitar un pedido del medio (al cancelarlo, o cuando su comuna se disuelve) no se tocan los enlaces a mano: se da **una vuelta completa** a la cola, desencolando cada pedido y reencolando los que se quedan. Así solo se usan operaciones de cola y los que se quedan conservan su orden.
+
 ## La biblioteca
 
 Hay **un solo catálogo** (el AVL con los nombres de los libros), compartido por toda la sociedad, y **una caché por comuna** (un splay en `struct Biblioteca`, dentro de cada comuna). Cada comuna tiene su propia caché porque cada una busca cosas distintas.
@@ -274,10 +283,11 @@ Cada día (`simularDia`, en `Juego.c`) ocurre en este orden:
 3. `cargarCelulares`: el sol carga la batería del celular de cada comuna.
 4. `decaerEfectos`: la penalización, la solidaridad y el apoyo recibido bajan 2 puntos.
 5. `recalcularServicios`: los servicios se vuelven a contar a partir de lo que saben las personas.
-6. `ayudaAutonoma`: las comunas que no administra la persona usuaria se ayudan solas.
-7. `avanzarEmergencias`: si toca, ocurre una emergencia.
-8. `actualizarIndices`: se recalculan necesidad, reciprocidad y satisfacción.
-9. `revisarDisoluciones`: se cuentan los días en crisis y se disuelven las comunas que llevan 3.
+6. `atenderPedidos`: se atiende la cola de pedidos de la red de ayuda mutua, en orden de llegada.
+7. `ayudaAutonoma`: las comunas que no administra la persona usuaria se ayudan solas con lo que les sobre.
+8. `avanzarEmergencias`: si toca, ocurre una emergencia.
+9. `actualizarIndices`: se recalculan necesidad, reciprocidad y satisfacción.
+10. `revisarDisoluciones`: se cuentan los días en crisis y se disuelven las comunas que llevan 3.
 
 Después se muestra el estado y la persona usuaria decide qué hacer. Después de cada regalo o de aprender un servicio, los índices se recalculan.
 
@@ -349,7 +359,7 @@ Se limita al rango 0 a 100.
 Una comuna está **en crisis** si su necesidad es **85 o más** o su satisfacción es **25 o menos**. Si pasa **3 días seguidos** en crisis, se disuelve:
 
 1. Sus personas se mudan en ronda a las comunas vecinas (y se llevan sus servicios y lo que han estudiado).
-2. Se saca de la lista doble y se libera.
+2. Sus pedidos salen de la cola de ayuda mutua (si no, apuntarían a memoria liberada), y la comuna se saca de la lista doble y se libera.
 3. Si era de la persona usuaria, se saca de su lista y pierde una vida. Si todavía le quedan vidas, elige otra comuna para administrar.
 
 Si sale de la crisis antes de los 3 días, la cuenta vuelve a empezar. La partida se pierde con **3 vidas perdidas** o si en la sociedad quedan **menos de 3 comunas**.
@@ -387,6 +397,15 @@ Cada **3 a 7 días** (sorteado cada vez) ocurre una emergencia:
 - Si en una comuna hay más personas que saben un servicio de las que necesita, una se muda a una comuna donde nadie lo sabe (a lo sumo una mudanza por día).
 - Solo se anuncian en pantalla los regalos que reciben las comunas de la persona usuaria.
 
+**Red de ayuda mutua** (`atenderPedidos`): desde el celular, las comunas de la persona usuaria pueden **pedir** un bien que les falte (por debajo del 70%). Los pedidos entran a una cola y cada día, antes de la ayuda autónoma, se da una vuelta a la cola:
+
+1. Se desencola el pedido del frente.
+2. Si la comuna ya no lo necesita (llegó al 70% por producción u otro regalo), el pedido se cierra.
+3. Si no, la comuna autónoma con más excedente de ese bien (sobre el 70%) le regala el 10% de su máximo, con las mismas reglas de `regalarRecurso` (cuenta para la reciprocidad).
+4. Si ninguna puede, el pedido suma un día de espera y vuelve al final.
+
+Así quien pide primero recibe primero, y quien pide no se salta el reparto: solo tiene prioridad sobre la ayuda autónoma general.
+
 Esto crea un incentivo sin obligación: las comunas autónomas ayudan a las de la persona usuaria, y la reciprocidad de esas comunas sube si ellas también devuelven ayuda.
 
 ## Parámetros de diseño
@@ -409,12 +428,13 @@ Todos son decisiones nuestras y están pensados para ajustarse fácilmente.
 | Penalización a las comunas cercanas | +10 | `Emergencias.c` |
 | Reserva de quien regala un bien | 40% del máximo | `Economia.c` |
 | Bono de solidaridad / de apoyo | +5 cada uno (tope 15) | `Economia.c` |
-| Ayuda autónoma: excedente / necesidad / regalo | 70% / 40% / 10% del máximo | `Economia.c` |
+| Ayuda autónoma: excedente / necesidad / regalo | 70% / 40% / 10% del máximo | `Economia.h` |
 | Consumo / producción de bienes por comuna | 2.00% a 5.00%, al azar | `Consumo.c`, `Produccion.c` |
 | Máximo de un bien / de un servicio | 2 por persona / 1 por cada 10 | `Sociedad.c` |
 | Servicios por persona al iniciar | 0 (30%), 1 (50%), 2 (20%) | `Sociedad.c` |
 | Libros para aprender un servicio | 3 | `Persona.h` |
 | Casillas de la tabla hash | 509 | `TablaPersonas.h` |
+| Pedidos: se puede pedir bajo / se atiende con | 70% / 10% del máximo del que da | `Economia.h` |
 
 ## Funcionalidad propia: el celular solar
 
@@ -455,12 +475,20 @@ Cada comuna tiene un **celular comunitario** que funciona con energía solar. Se
 - Las líneas largas se cortan en el último espacio, y las letras con tilde se cuentan como un carácter para que no se descuadre el borde.
 - Si la batería se acaba, el celular se apaga, aunque sea a media lectura.
 
+### App Red de ayuda mutua
+
+| Opción | Qué hace | Batería |
+|---|---|---|
+| Ver la cola | Muestra los pedidos de toda la sociedad desde el frente, cada uno en dos líneas (comuna, y bien con los días que lleva esperando). Los de esta comuna se marcan con `*` | 1% |
+| Pedir un bien | Muestra los bienes de la comuna con su porcentaje y se elige por número. No se puede pedir lo que ya está sobre el 70% ni pedir dos veces lo mismo | 1% |
+| Cancelar un pedido | Muestra los pedidos de esta comuna, numerados, y quita el elegido | Gratis |
+
 ### Las opciones secretas
 
 - **4:** abre algo que no se debía abrir. Muestra el enlace a un meme (`memes/meme.png`).
-- **5:** **autodestrucción.** Muestra una explosión en tres cuadros (la chispa sobre la ciudad, el hongo y el polvo de la memoria liberada) y la sociedad entera se disuelve. No usa `exit()`: el programa sale del ciclo de días y pasa por el código normal de liberación, así que se libera toda la memoria (la lista del jugador, las comunas con sus cachés, el AVL, la tabla hash y los catálogos). Lo comprobamos con AddressSanitizer: no queda ninguna fuga.
+- **5:** **autodestrucción.** Muestra una explosión en tres cuadros (la chispa sobre la ciudad, el hongo y el polvo de la memoria liberada) y la sociedad entera se disuelve. No usa `exit()`: el programa sale del ciclo de días y pasa por el código normal de liberación, así que se libera toda la memoria (la lista del jugador, la cola de pedidos, las comunas con sus cachés, el AVL, la tabla hash y los catálogos). Lo comprobamos con AddressSanitizer: no queda ninguna fuga.
 
-Las opciones 2 y 3 (red de ayuda mutua y notificaciones) quedaron planeadas pero no se implementaron; muestran "Esta app todavia se esta instalando...".
+La opción 3 (notificaciones) quedó planeada pero no se implementó; muestra "Esta app todavia se esta instalando...".
 
 ## Limitaciones conocidas
 
