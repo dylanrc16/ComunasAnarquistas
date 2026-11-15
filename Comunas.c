@@ -86,6 +86,7 @@ void liberarComuna(struct Comuna *comuna) {
     liberarRecursos(comuna->bienes);
     liberarRecursos(comuna->servicios);
     liberarSplay(comuna->biblioteca.cache);
+    liberarBandeja(&comuna->bandeja);
     free(comuna);
 }
 

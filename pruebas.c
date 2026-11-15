@@ -10,6 +10,7 @@
 #include "TablaPersonas.h"
 #include "Jugador.h"
 #include "Cola.h"
+#include "Notificaciones.h"
 
 // Cuenta cuantas verificaciones fallaron
 static int fallos = 0;
@@ -553,6 +554,59 @@ static void probarCola(void) {
     liberarComuna(b);
 }
 
+// ---------- Pila de notificaciones ----------
+
+// Funcion para probar la pila (LIFO) de notificaciones del celular
+static void probarNotificaciones(void) {
+    printf("\n== Pila LIFO: notificaciones ==\n");
+
+    struct Bandeja bandeja;
+    iniciarBandeja(&bandeja);
+    verificar("la bandeja nueva esta vacia", bandeja.tope == NULL && bandeja.cantidad == 0 && bandeja.noLeidas == 0);
+    verificar("desapilar una bandeja vacia devuelve NULL", desapilarNotificacion(&bandeja) == NULL);
+
+    // Apilar: la ultima que llega queda en el tope
+    apilarNotificacion(&bandeja, 1, "primera");
+    apilarNotificacion(&bandeja, 2, "segunda");
+    apilarNotificacion(&bandeja, 3, "tercera");
+    verificar("la ultima que llego queda en el tope", strcmp(bandeja.tope->texto, "tercera") == 0 && bandeja.tope->dia == 3);
+    verificar("debajo del tope esta la anterior", strcmp(bandeja.tope->siguiente->texto, "segunda") == 0);
+    verificar("hay 3 notificaciones sin leer", bandeja.cantidad == 3 && bandeja.noLeidas == 3);
+
+    // Desapilar: sale la mas reciente (LIFO)
+    struct Notificacion *sacada = desapilarNotificacion(&bandeja);
+    verificar("desapilar saca la mas reciente (tercera)", strcmp(sacada->texto, "tercera") == 0);
+    verificar("despues el tope es segunda", strcmp(bandeja.tope->texto, "segunda") == 0 && bandeja.cantidad == 2);
+    free(sacada);
+
+    // Tope maximo: al pasarse se descarta la del fondo
+    for (int i = 0; i < NOTIFICACIONES_MAXIMAS; i++) {
+        char texto[20];
+        snprintf(texto, sizeof(texto), "aviso %d", i);
+        apilarNotificacion(&bandeja, 10, texto);
+    }
+
+    struct Notificacion *fondo = bandeja.tope;
+    while (fondo->siguiente != NULL) {
+        fondo = fondo->siguiente;
+    }
+
+    verificar("nunca guarda mas de NOTIFICACIONES_MAXIMAS", bandeja.cantidad == NOTIFICACIONES_MAXIMAS);
+    verificar("se descartaron las mas viejas: el fondo es aviso 0", strcmp(fondo->texto, "aviso 0") == 0);
+    verificar("el tope es la ultima que llego", strcmp(bandeja.tope->texto, "aviso 29") == 0);
+
+    // notificar() arma el texto como printf y le pone el dia actual
+    struct Comuna *a = crearComuna("A", 10);
+    fijarDiaNotificaciones(7);
+    notificar(a, "%s recibio %d de %s", "A", 16, "Agua");
+    verificar("notificar arma el texto con formato", strcmp(a->bandeja.tope->texto, "A recibio 16 de Agua") == 0);
+    verificar("notificar le pone el dia actual", a->bandeja.tope->dia == 7);
+    liberarComuna(a);
+
+    liberarBandeja(&bandeja);
+    verificar("liberarBandeja deja la bandeja vacia", bandeja.tope == NULL && bandeja.cantidad == 0);
+}
+
 // Funcion principal de las pruebas: corre todas y devuelve 1 si alguna fallo
 int main(void) {
     probarPersonas();
@@ -564,6 +618,7 @@ int main(void) {
     probarTablaHash();
     probarJugador();
     probarCola();
+    probarNotificaciones();
  
     printf("\n");
     if (fallos == 0) {

@@ -4,6 +4,7 @@
 
 #include "Recurso.h"
 #include "Biblioteca.h"
+#include "Notificaciones.h"
 
 // Nodo de la lista doblemente enlazada de comunas
 struct Comuna
@@ -28,6 +29,7 @@ struct Comuna
     struct Recurso *bienes;  // Lista de bienes de la comuna
     struct Recurso *servicios;  // Lista de servicios de la comuna
     struct Biblioteca biblioteca;  // Biblioteca comunitaria: su propia cache de busquedas
+    struct Bandeja bandeja;  // Notificaciones del celular (pila: la mas reciente arriba)
 
     struct Comuna *anterior;  // Comuna anterior en la lista
     struct Comuna *siguiente;  // Comuna siguiente en la lista
@@ -41,7 +43,7 @@ struct Comuna *agregarComunaFinal(struct Comuna *inicio, const char *nombre, int
 struct Comuna *buscarComuna(struct Comuna *inicio, const char *nombre);
 // Funcion para imprimir todas las comunas
 void imprimirComunas(struct Comuna *inicio);
-// Funcion para liberar una sola comuna (sus bienes, servicios y biblioteca)
+// Funcion para liberar una sola comuna (sus bienes, servicios, biblioteca y notificaciones)
 void liberarComuna(struct Comuna *comuna);
 // Funcion para liberar la lista de comunas
 void liberarComunas(struct Comuna *inicio);
