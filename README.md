@@ -2,7 +2,7 @@
 
 Proyecto 2 de Estructuras de Datos. Extiende el Proyecto 1, *Una sociedad solarpunk de comunas anarquistas*: una simulación por turnos (cada turno es un día) de una sociedad de 500 personas organizada en comunas que se ayudan entre sí **sin dinero y sin mercado**. El éxito de la sociedad se mide con la **satisfacción** de sus habitantes.
 
-En este proyecto las personas saben **servicios**, las comunas pueden **disolverse**, la persona usuaria administra **3 comunas** y cada comuna tiene una **biblioteca** donde su gente aprende servicios leyendo libros. La biblioteca usa un **AVL** para buscar libros por nombre y un **árbol splay** como caché de búsquedas de texto. Las personas se guardan en una **tabla hash** y los pedidos de ayuda entre comunas forman una **cola**.
+En este proyecto las personas saben **servicios**, las comunas pueden **disolverse**, la persona usuaria administra **3 comunas** y cada comuna tiene una **biblioteca** donde su gente aprende servicios leyendo libros. La biblioteca usa un **AVL** para buscar libros por nombre y un **árbol splay** como caché de búsquedas de texto. Las personas se guardan en una **tabla hash** los pedidos de ayuda entre comunas forman una **cola** y las notificaciones del celular una **pila**.
 
 **Integrantes:**
 
@@ -45,7 +45,7 @@ Todo se compila desde la carpeta del proyecto, donde están también los archivo
 En Linux:
 
 ```
-gcc -Wall -Wextra -o proyecto Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c Avl.c Splay.c Biblioteca.c TablaPersonas.c Jugador.c Celular.c Cola.c
+gcc -Wall -Wextra -o proyecto Main.c Juego.c Comunas.c Consumo.c Economia.c Emergencias.c Indices.c Persona.c Produccion.c Recurso.c Sociedad.c Avl.c Splay.c Biblioteca.c TablaPersonas.c Jugador.c Celular.c Cola.c Notificaciones.c
 ./proyecto
 ```
 
@@ -120,6 +120,7 @@ Donde hay que elegir una comuna, un recurso o una persona, se elige **por númer
 | `Biblioteca.c/.h` | Catálogo de libros (AVL), búsqueda de texto en los archivos y uso de la caché. |
 | `Jugador.c/.h` | Lista simple de las comunas que administra la persona usuaria y sus vidas. |
 | `Cola.c/.h` | Cola FIFO de pedidos de la red de ayuda mutua. |
+| `Notificaciones.c/.h` | Pila LIFO de notificaciones de cada comuna. |
 
 **Simulación**
 
@@ -146,7 +147,7 @@ Donde hay que elegir una comuna, un recurso o una persona, se elige **por númer
 `pruebas.c` es un programa aparte, con su propio `main`, que verifica cada estructura de datos. Cada prueba imprime `[OK]` o `[FALLO]`, y al final dice si todas pasaron.
 
 ```
-gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Sociedad.c Avl.c Splay.c TablaPersonas.c Jugador.c Cola.c
+gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Sociedad.c Avl.c Splay.c TablaPersonas.c Jugador.c Cola.c Notificaciones.c
 ./pruebas_bin
 ```
 
@@ -160,6 +161,7 @@ gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Socieda
 | Tabla hash | Función hash, insertar, buscar, nombres repetidos (`Ana Rojas 2`) y colisiones resueltas por encadenamiento. |
 | Jugador | Máximo 3 comunas, sin repetir, quitar una (sin liberar la comuna) y agregar un reemplazo. |
 | Cola | Orden de llegada (FIFO), reencolar al final, cancelar uno del medio sin desordenar el resto, quitar los de una comuna y que frente y final queden en NULL al vaciarse. |
+| Notificaciones | La más reciente queda en el tope (LIFO), nunca se guardan más de 30 (se descartan las más viejas) y `notificar` arma el texto con el día actual. |
 
 
 ## Estructuras de datos
@@ -172,6 +174,7 @@ gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Socieda
 | **AVL** | Catálogo de libros (nombres de archivo) | Buscar un libro por nombre en O(log n), aunque haya miles. |
 | **Árbol splay** | Caché de búsquedas de texto de cada comuna | Las búsquedas que se repiten quedan cerca de la raíz y no hay que volver a leer los libros. |
 | **Cola (FIFO)** | Pedidos de la red de ayuda mutua | El primer pedido que llega es el primero que se atiende. |
+| **Pila (LIFO)** | Notificaciones de cada comuna | Lo primero que se ve en el celular es lo último que pasó. |
 
 ### Lista doble de comunas y disolución
 
@@ -260,6 +263,19 @@ El resultado es `A(.,F(B(.,D(C,E)),G))`. Las opciones 6 y 10 imprimen cada zig, 
 Es una lista simple con **dos punteros**: `frente`, por donde se atiende, y `final`, por donde se encola. Con solo `frente`, encolar obligaría a recorrer toda la cola hasta el último (O(n)); con `final`, **encolar y desencolar cuestan O(1)**. Cuando la cola se vacía, los dos vuelven a NULL.
 
 Para quitar un pedido del medio (al cancelarlo, o cuando su comuna se disuelve) no se tocan los enlaces a mano: se da **una vuelta completa** a la cola, desencolando cada pedido y reencolando los que se quedan. Así solo se usan operaciones de cola y los que se quedan conservan su orden.
+
+### Pila de notificaciones (`Notificaciones.c`)
+
+Cada comuna tiene una **bandeja**: una lista simple donde se **apila** en el tope. Apilar y desapilar cuestan O(1) y al recorrerla desde el tope sale primero lo más reciente, que es justo el orden de un celular. Guarda como máximo 30; al pasarse, se descarta la del fondo (la más vieja). La bandeja se libera con su comuna.
+
+`notificar(comuna, formato, ...)` funciona como `printf` (usa `vsnprintf` con `va_list`) y le pone a cada aviso el día actual. Se notifica:
+
+- Un regalo recibido (bien o persona que se muda).
+- Un pedido atendido o cerrado.
+- Una emergencia en la comuna o en una vecina.
+- Cada día de crisis, y al salir de la crisis.
+- Que una comuna vecina se disolvió y llegó parte de su gente.
+- Que una persona aprendió un servicio.
 
 ## La biblioteca
 
@@ -434,6 +450,7 @@ Todos son decisiones nuestras y están pensados para ajustarse fácilmente.
 | Servicios por persona al iniciar | 0 (30%), 1 (50%), 2 (20%) | `Sociedad.c` |
 | Libros para aprender un servicio | 3 | `Persona.h` |
 | Casillas de la tabla hash | 509 | `TablaPersonas.h` |
+| Notificaciones guardadas por comuna | 30 | `Notificaciones.h` |
 | Pedidos: se puede pedir bajo / se atiende con | 70% / 10% del máximo del que da | `Economia.h` |
 
 ## Funcionalidad propia: el celular solar
@@ -483,12 +500,15 @@ Cada comuna tiene un **celular comunitario** que funciona con energía solar. Se
 | Pedir un bien | Muestra los bienes de la comuna con su porcentaje y se elige por número. No se puede pedir lo que ya está sobre el 70% ni pedir dos veces lo mismo | 1% |
 | Cancelar un pedido | Muestra los pedidos de esta comuna, numerados, y quita el elegido | Gratis |
 
+### App Notificaciones
+
+En la pantalla de inicio la opción dice cuántas hay sin leer, por ejemplo `3. Notificaciones (6)`. Al abrirla se ven de la más reciente a la más vieja, 4 por página (con S, A y X), cada una con su día y marcadas como `(nueva)` las que no se habían visto. Al abrirla, pasan a leídas. Cada página cuesta 1% de batería.
+
 ### Las opciones secretas
 
 - **4:** abre algo que no se debía abrir. Muestra el enlace a un meme (`memes/meme.png`).
-- **5:** **autodestrucción.** Muestra una explosión en tres cuadros (la chispa sobre la ciudad, el hongo y el polvo de la memoria liberada) y la sociedad entera se disuelve. No usa `exit()`: el programa sale del ciclo de días y pasa por el código normal de liberación, así que se libera toda la memoria (la lista del jugador, la cola de pedidos, las comunas con sus cachés, el AVL, la tabla hash y los catálogos). Lo comprobamos con AddressSanitizer: no queda ninguna fuga.
+- **5:** **autodestrucción.** Muestra una explosión en tres cuadros (la chispa sobre la ciudad, el hongo y el polvo de la memoria liberada) y la sociedad entera se disuelve. No usa `exit()`: el programa sale del ciclo de días y pasa por el código normal de liberación, así que se libera toda la memoria (la lista del jugador, la cola de pedidos, las comunas con sus cachés y notificaciones, el AVL, la tabla hash y los catálogos). Lo comprobamos con AddressSanitizer: no queda ninguna fuga.
 
-La opción 3 (notificaciones) quedó planeada pero no se implementó; muestra "Esta app todavia se esta instalando...".
 
 ## Limitaciones conocidas
 
