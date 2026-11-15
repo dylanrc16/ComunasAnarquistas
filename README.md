@@ -18,6 +18,8 @@ Duvan Asenjo
 3. [Cómo se juega](#cómo-se-juega)
 4. [Organización del código](#organización-del-código)
 5. [Pruebas](#pruebas)
+6. [Estructuras de datos](#estructuras-de-datos)
+7. [La biblioteca](#la-biblioteca)
 
 ---
 
@@ -151,14 +153,108 @@ gcc -Wall -Wextra -o pruebas_bin pruebas.c Persona.c Recurso.c Comunas.c Socieda
 
 ## Estructuras de datos
 
-No se usan arreglos para guardar nombres. Todo está en estructuras lineales enlazadas:
-
 | Estructura | Dónde se usa | Por qué |
 |---|---|---|
-| **Lista simple** | Personas (`struct Persona`) y recursos, o sea bienes y servicios (`struct Recurso`) | Solo se recorren de principio a fin, por lo que basta un puntero `siguiente`. |
-| **Lista doble** | Comunas (`struct Comuna`) | Para conocer a las comunas cercanas necesitamos movernos hacia adelante **y hacia atrás**: las 2 anteriores y las 2 siguientes. Para eso se usa el puntero `anterior`. |
+| **Lista simple** | Recursos de cada comuna, servicios de cada persona, libros leídos, resultados de una búsqueda y comunas del jugador | Solo se recorren de principio a fin, así que basta un puntero `siguiente`. |
+| **Lista doble** | Comunas de la sociedad | Para conocer a las vecinas hay que moverse hacia adelante **y hacia atrás** (2 anteriores y 2 siguientes). |
+| **Tabla hash** | Las 500 personas | Encontrar a una persona por nombre sin recorrer a las 500. |
+| **AVL** | Catálogo de libros (nombres de archivo) | Buscar un libro por nombre en O(log n), aunque haya miles. |
+| **Árbol splay** | Caché de búsquedas de texto de cada comuna | Las búsquedas que se repiten quedan cerca de la raíz y no hay que volver a leer los libros. |
 
-Cada comuna, a su vez, tiene dos listas simples de recursos: una de bienes y otra de servicios.
+### Lista doble de comunas y disolución
+
+Cada comuna apunta a la `anterior` y a la `siguiente`. Cuando una comuna se disuelve, `disolverComuna` (`Sociedad.c`):
+
+1. Muda a sus personas, en ronda, a las comunas vecinas.
+2. La saca de la lista reenganchando a sus vecinas: `anterior->siguiente = siguiente` y `siguiente->anterior = anterior`. Si era la primera, la cabeza pasa a ser la siguiente; por eso la función devuelve la nueva cabeza.
+3. Libera la comuna: sus bienes, sus servicios y su caché.
+
+### Tabla hash de personas (`TablaPersonas.c`)
+
+- **Tamaño:** 509 casillas, un número primo cercano a las 500 personas, para que en promedio quede una persona por casilla.
+- **Función hash djb2:** empieza en 5381 y, por cada letra del nombre, multiplica por 33 y suma la letra. Al final se toma el residuo entre 509.
+- **Colisiones por encadenamiento:** cada casilla tiene una lista simple de personas. La persona nueva se inserta al inicio de la lista de su casilla, así que insertar es O(1).
+- **Nombres repetidos:** el archivo `personas` tiene 96 nombres repetidos. Para que cada nombre sea único, el segundo se guarda como `Nombre 2`, el tercero como `Nombre 3`, y así.
+- **Con el archivo real:** las 500 personas usan 308 casillas, 192 personas cayeron en una casilla ocupada y la lista más larga tiene 6. Esas estadísticas se imprimen al iniciar.
+
+Buscar a una persona cuesta O(1) en promedio: se calcula su casilla y se recorre solo esa lista corta.
+
+### AVL de libros (`Avl.c`)
+
+Es un árbol binario de búsqueda ordenado por nombre de archivo, que se mantiene balanceado: en cada nodo, la altura del lado izquierdo y la del derecho difieren a lo sumo en 1. Al insertar, cuando un nodo queda con factor de balance 2 o −2 se aplica una de 4 rotaciones:
+
+| Caso | Se arregla con |
+|---|---|
+| Izquierda-izquierda | Una rotación a la derecha |
+| Derecha-derecha | Una rotación a la izquierda |
+| Izquierda-derecha | Rotación a la izquierda en el hijo, luego a la derecha en el nodo |
+| Derecha-izquierda | Rotación a la derecha en el hijo, luego a la izquierda en el nodo |
+
+Los diagramas de cada rotación están en los comentarios de `Avl.c`. Si los nombres llegan ordenados (por ejemplo `libro0001.txt`, `libro0002.txt`...), un árbol sin balanceo se volvería una lista de 1000 niveles; con el AVL, 1000 libros quedan con altura de a lo sumo 14 (un árbol perfecto necesitaría 10).
+
+### Árbol splay: la caché (`Splay.c`)
+
+Cada nodo guarda un texto buscado y la lista de libros donde aparece. Al buscar un texto se **chaflanea**: el nodo buscado (o el último del camino, si no está) sube hasta la raíz. Se hace de abajo hacia arriba, igual que en papel:
+
+1. Se baja desde la raíz hasta el texto y se guarda el camino en un arreglo.
+2. Desde ese nodo se sube de dos en dos niveles:
+   - **Zig:** el padre es la raíz. Una rotación.
+   - **Zig-zig:** el nodo y su padre están del mismo lado. Se rota **primero el abuelo** y luego el padre.
+   - **Zig-zag:** el nodo y su padre están en lados distintos. Se rota el padre y luego el abuelo.
+
+**Ejemplo (el mismo que verifica `pruebas.c`):** buscar `A` en este árbol. El camino es F → D → B → A.
+
+```
+Antes:
+
+        F
+       / \
+      D   G
+     / \
+    B   E
+   / \
+  A   C
+
+Zig-zig: A y su padre B son hijos izquierdos.
+Se rota primero el abuelo D y luego B:
+
+        F
+       / \
+      A   G
+       \
+        B
+         \
+          D
+         / \
+        C   E
+
+Zig: el padre de A es la raiz F. Una rotacion:
+
+    A
+     \
+      F
+     / \
+    B   G
+     \
+      D
+     / \
+    C   E
+```
+
+El resultado es `A(.,F(B(.,D(C,E)),G))`. Las opciones 6 y 10 imprimen cada zig, zig-zig o zig-zag que se hace.
+
+## La biblioteca
+
+Hay **un solo catálogo** (el AVL con los nombres de los libros), compartido por toda la sociedad, y **una caché por comuna** (un splay en `struct Biblioteca`, dentro de cada comuna). Cada comuna tiene su propia caché porque cada una busca cosas distintas.
+
+**Buscar un texto** (`buscarTexto`, en `Biblioteca.c`):
+
+1. El texto se pasa a minúsculas, así "Amor" y "amor" son la misma búsqueda.
+2. Se busca en la caché de la comuna. Si está, es un **acierto**: el resultado ya está en la raíz y no se lee ningún archivo.
+3. Si no está, es un **fallo**: se abre cada libro y se lee línea por línea, en minúsculas. En cuanto un libro tiene el texto, se anota y se pasa al siguiente libro, sin leerlo completo.
+4. El resultado se guarda en la caché con `insertarSplay`, y el texto nuevo queda en la raíz.
+
+**Aprender un servicio:** una persona elige un servicio para estudiar (opción 10). Cada búsqueda con resultados le hace leer un libro de la lista que todavía no había leído. Al leer **3 libros** aprende el servicio, y la comuna lo tiene en cuenta desde ese momento. Un libro ya leído no vuelve a contar.
 
 ## Un día de simulación
 
